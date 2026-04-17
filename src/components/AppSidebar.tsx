@@ -1,8 +1,10 @@
-import { LayoutDashboard, Package, FileText, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
-const navItems = [
+const baseNav = [
   { to: "/", icon: LayoutDashboard, label: "Tableau de bord" },
   { to: "/products", icon: Package, label: "Produits & Stock" },
   { to: "/invoices", icon: FileText, label: "Factures" },
@@ -10,6 +12,10 @@ const navItems = [
 
 const AppSidebar = () => {
   const location = useLocation();
+  const { role, user, signOut } = useAuth();
+  const navItems = role === "admin"
+    ? [...baseNav, { to: "/admin", icon: Shield, label: "Administration" }]
+    : baseNav;
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
@@ -44,7 +50,24 @@ const AppSidebar = () => {
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border p-4">
+      <div className="border-t border-sidebar-border p-4 space-y-3">
+        {user && (
+          <div className="space-y-2">
+            <div className="text-xs">
+              <p className="font-medium text-sidebar-primary truncate">{user.email}</p>
+              <p className="text-sidebar-muted capitalize">{role ?? "user"}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={signOut}
+              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              Se déconnecter
+            </Button>
+          </div>
+        )}
         <p className="text-xs text-sidebar-muted">© 2026 GestCom v1.0</p>
       </div>
     </aside>
