@@ -1,0 +1,41 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" fill="#F8F9FA"/>
+  
+  <!-- Computer/Laptop -->
+  <rect x="100" y="80" width="200" height="120" rx="8" fill="#2D3748"/>
+  <rect x="110" y="90" width="180" height="100" rx="4" fill="#1A202C"/>
+  
+  <!-- Screen content -->
+  <rect x="120" y="100" width="160" height="80" rx="2" fill="#4299E1"/>
+  
+  <!-- Chart bars on screen -->
+  <rect x="130" y="140" width="20" height="30" fill="#48BB78"/>
+  <rect x="160" y="120" width="20" height="50" fill="#ED8936"/>
+  <rect x="190" y="130" width="20" height="40" fill="#9F7AEA"/>
+  <rect x="220" y="110" width="20" height="60" fill="#F56565"/>
+  <rect x="250" y="125" width="20" height="45" fill="#38B2AC"/>
+  
+  <!-- Keyboard base -->
+  <rect x="120" y="210" width="160" height="8" rx="2" fill="#718096"/>
+  
+  <!-- Chart icons floating -->
+  <circle cx="80" cy="60" r="20" fill="#E2E8F0"/>
+  <path d="M70 60 L75 55 L80 65 L85 50 L90 60" stroke="#4299E1" stroke-width="2" fill="none"/>
+  
+  <circle cx="320" cy="70" r="20" fill="#E2E8F0"/>
+  <rect x="310" y="60" width="4" height="20" fill="#48BB78"/>
+  <rect x="318" y="65" width="4" height="15" fill="#ED8936"/>
+  <rect x="326" y="55" width="4" height="25" fill="#9F7AEA"/>
+  
+  <!-- Data points -->
+  <circle cx="150" cy="50" r="3" fill="#CBD5E0"/>
+  <circle cx="200" cy="45" r="3" fill="#CBD5E0"/>
+  <circle cx="250" cy="55" r="3" fill="#CBD5E0"/>
+  
+  <!-- Connecting lines -->
+  <path d="M150 50 L200 45 L250 55" stroke="#CBD5E0" stroke-width="1" stroke-dasharray="2,2"/>
+  
+  <!-- Bottom decoration -->
+  <rect x="50" y="250" width="300" height="2" fill="#E2E8F0"/>
+</svg>

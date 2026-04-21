@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut, ShoppingCart, BarChart3, Users as UsersIcon, Archive, PieChart } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,16 +6,23 @@ import { Button } from "@/components/ui/button";
 
 const baseNav = [
   { to: "/", icon: LayoutDashboard, label: "Tableau de bord" },
-  { to: "/products", icon: Package, label: "Produits & Stock" },
+  { to: "/products", icon: Package, label: "Produits" },
+  { to: "/sales", icon: ShoppingCart, label: "Ventes" },
+  { to: "/inventory", icon: Archive, label: "Inventaires" },
   { to: "/invoices", icon: FileText, label: "Factures" },
+];
+
+const adminNav = [
+  ...baseNav,
+  { to: "/statistics", icon: PieChart, label: "Statistiques" },
+  { to: "/reports", icon: BarChart3, label: "Rapports" },
+  { to: "/admin", icon: UsersIcon, label: "Utilisateurs" },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
   const { role, user, signOut } = useAuth();
-  const navItems = role === "admin"
-    ? [...baseNav, { to: "/admin", icon: Shield, label: "Administration" }]
-    : baseNav;
+  const navItems = role === "admin" ? adminNav : baseNav;
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
@@ -54,8 +61,8 @@ const AppSidebar = () => {
         {user && (
           <div className="space-y-2">
             <div className="text-xs">
-              <p className="font-medium text-sidebar-primary truncate">{user.email}</p>
-              <p className="text-sidebar-muted capitalize">{role ?? "user"}</p>
+              <p className="font-medium text-sidebar-primary truncate">{user.name}</p>
+              <p className="text-sidebar-muted capitalize">{role}</p>
             </div>
             <Button
               variant="ghost"

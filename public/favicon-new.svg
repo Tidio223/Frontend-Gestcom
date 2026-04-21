@@ -1,0 +1,8 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="6" fill="#2563eb"/>
+  <rect x="4" y="4" width="24" height="24" rx="4" fill="#3b82f6"/>
+  <path d="M8 16L14 10L20 16L26 10V22H8V16Z" fill="#60a5fa"/>
+  <path d="M14 10L20 16V22H14V10Z" fill="#93c5fd"/>
+  <path d="M8 16L14 10V22H8V16Z" fill="#dbeafe"/>
+  <text x="16" y="21" font-family="Arial, sans-serif" font-size="8" font-weight="bold" text-anchor="middle" fill="white">GC</text>
+</svg>
