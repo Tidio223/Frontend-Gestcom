@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
-import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Loader2, Mail, Lock, Eye, EyeOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
 const schema = z.object({
   email: z.string().trim().email("Email invalide").max(255),
@@ -20,6 +23,12 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetSubmitting, setResetSubmitting] = useState(false);
 
   if (!loading && user) return <Navigate to="/" replace />;
 
@@ -39,6 +48,66 @@ const Auth = () => {
       toast.success("Connexion réussie");
       navigate("/", { replace: true });
     }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      toast.error("Veuillez entrer votre email");
+      return;
+    }
+    setResetSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Token de réinitialisation généré");
+        setResetToken(data.data.resetToken);
+        setForgotPasswordOpen(false);
+        setResetPasswordOpen(true);
+      } else {
+        toast.error(data.message || "Erreur lors de la demande");
+      }
+    } catch (error) {
+      toast.error("Erreur de connexion");
+    }
+    setResetSubmitting(false);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetToken || !newPassword) {
+      toast.error("Données incomplètes");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+    setResetSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resetToken, newPassword }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Mot de passe réinitialisé avec succès");
+        setResetPasswordOpen(false);
+        setResetToken("");
+        setNewPassword("");
+      } else {
+        toast.error(data.message || "Erreur lors de la réinitialisation");
+      }
+    } catch (error) {
+      toast.error("Erreur de connexion");
+    }
+    setResetSubmitting(false);
   };
 
   return (
@@ -117,9 +186,13 @@ const Auth = () => {
                 <input type="checkbox" className="h-4 w-4 rounded border-input text-primary focus:ring-primary" />
                 Remember Me
               </label>
-              <a href="#" className="font-medium text-primary hover:text-primary/80">
+              <button
+                type="button"
+                onClick={() => setForgotPasswordOpen(true)}
+                className="font-medium text-primary hover:text-primary/80"
+              >
                 Forgot Password?
-              </a>
+              </button>
             </div>
 
             <Button
@@ -139,6 +212,80 @@ const Auth = () => {
           </form>
         </div>
       </div>
+
+      {/* Modal Mot de passe oublié */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mot de passe oublié</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div>
+              <Label htmlFor="reset-email">Email</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                placeholder="Entrez votre email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                required
+                className="mt-2"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={resetSubmitting}
+            >
+              {resetSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Envoi en cours...
+                </>
+              ) : (
+                "Envoyer le token"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Réinitialisation du mot de passe */}
+      <Dialog open={resetPasswordOpen} onOpenChange={setResetPasswordOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Réinitialiser le mot de passe</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div>
+              <Label htmlFor="new-password">Nouveau mot de passe</Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="Entrez votre nouveau mot de passe"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                className="mt-2"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={resetSubmitting}
+            >
+              {resetSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Réinitialisation...
+                </>
+              ) : (
+                "Réinitialiser"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
