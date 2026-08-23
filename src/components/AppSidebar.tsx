@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut, ShoppingCart, BarChart3, Users as UsersIcon, Archive, PieChart } from "lucide-react";
+import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut, ShoppingCart, BarChart3, Users as UsersIcon, Archive, PieChart, Wallet } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,17 +12,22 @@ const baseNav = [
   { to: "/invoices", icon: FileText, label: "Factures" },
 ];
 
-const adminNav = [
+const gerantNav = [
   ...baseNav,
   { to: "/statistics", icon: PieChart, label: "Statistiques" },
   { to: "/reports", icon: BarChart3, label: "Rapports" },
+  { to: "/financial", icon: Wallet, label: "Gestion Financière" },
+];
+
+const adminNav = [
+  ...gerantNav,
   { to: "/admin", icon: UsersIcon, label: "Utilisateurs" },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
   const { role, user, signOut } = useAuth();
-  const navItems = role === "admin" ? adminNav : baseNav;
+  const navItems = role === "admin" ? adminNav : role === "gerant" ? gerantNav : baseNav;
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">

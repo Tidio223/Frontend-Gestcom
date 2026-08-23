@@ -29,6 +29,7 @@ export interface InvoiceItem {
 export interface SalesData {
   month: string;
   revenue: number;
+  profit: number;
   orders: number;
 }
 
@@ -77,13 +78,13 @@ export const invoices: Invoice[] = [
 ];
 
 export const salesData: SalesData[] = [
-  { month: "Oct", revenue: 1200000, orders: 18 },
-  { month: "Nov", revenue: 980000, orders: 14 },
-  { month: "Déc", revenue: 1450000, orders: 22 },
-  { month: "Jan", revenue: 890000, orders: 12 },
-  { month: "Fév", revenue: 1100000, orders: 16 },
-  { month: "Mar", revenue: 1680000, orders: 24 },
-  { month: "Avr", revenue: 789000, orders: 10 },
+  { month: "08/07", revenue: 1200000, profit: 348000, orders: 18 },
+  { month: "09/07", revenue: 980000, profit: 284200, orders: 14 },
+  { month: "10/07", revenue: 1450000, profit: 420500, orders: 22 },
+  { month: "11/07", revenue: 890000, profit: 258100, orders: 12 },
+  { month: "12/07", revenue: 1100000, profit: 319000, orders: 16 },
+  { month: "13/07", revenue: 1680000, profit: 487200, orders: 24 },
+  { month: "14/07", revenue: 789000, profit: 228810, orders: 10 },
 ];
 
 export const formatCurrency = (amount: number) => {

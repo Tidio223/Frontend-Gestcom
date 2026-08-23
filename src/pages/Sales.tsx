@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText } from "lucide-react";
-import { products, formatCurrency } from "@/data/mock-data";
+import { products, formatCurrency, Product } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -40,14 +40,23 @@ const Sales = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [customer, setCustomer] = useState("");
+  const [productList, setProductList] = useState<Product[]>(products);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Charger les produits depuis localStorage au démarrage
+  useEffect(() => {
+    const savedProducts = localStorage.getItem('products');
+    if (savedProducts) {
+      setProductList(JSON.parse(savedProducts));
+    }
+  }, []);
   const addItem = () => {
     setItems((prev) => [...prev, { productId: "", productName: "", quantity: 1, unitPrice: 0, total: 0 }]);
   };
 
   const updateItem = (index: number, productId: string) => {
-    const product = products.find((p) => p.id === productId);
+    const product = productList.find((p) => p.id === productId);
     if (!product) return;
     setItems((prev) =>
       prev.map((item, i) =>
@@ -57,6 +66,21 @@ const Sales = () => {
   };
 
   const updateQuantity = (index: number, quantity: number) => {
+    const item = items[index];
+    if (!item.productId) return;
+
+    const product = productList.find((p) => p.id === item.productId);
+    if (!product) return;
+
+    if (quantity > product.stock) {
+      toast({
+        title: "Stock insuffisant",
+        description: `Le nombre saisi (${quantity}) n'est pas disponible. Stock disponible: ${product.stock} ${product.unit}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     setItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, quantity, total: item.unitPrice * quantity } : item))
     );
@@ -68,6 +92,33 @@ const Sales = () => {
       toast({ title: "Erreur", description: "Veuillez remplir tous les champs", variant: "destructive" });
       return;
     }
+
+    // Vérifier le stock pour tous les articles
+    for (const item of items) {
+      const product = productList.find((p) => p.id === item.productId);
+      if (!product) continue;
+
+      if (item.quantity > product.stock) {
+        toast({
+          title: "Stock insuffisant",
+          description: `Le produit ${product.name} n'a pas assez de stock. Quantité demandée: ${item.quantity}, Stock disponible: ${product.stock} ${product.unit}`,
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
+    // Mettre à jour le stock des produits
+    const updatedProducts = productList.map((product) => {
+      const soldItem = items.find((item) => item.productId === product.id);
+      if (soldItem) {
+        return { ...product, stock: product.stock - soldItem.quantity };
+      }
+      return product;
+    });
+
+    setProductList(updatedProducts);
+    localStorage.setItem('products', JSON.stringify(updatedProducts));
 
     const newSale: Sale = {
       id: String(Date.now()),
@@ -158,7 +209,7 @@ const Sales = () => {
                             <SelectValue placeholder="Produit" />
                           </SelectTrigger>
                           <SelectContent>
-                            {products.map((p) => (
+                            {productList.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.name} - {formatCurrency(p.price)}
                               </SelectItem>

@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Package, AlertTriangle, TrendingDown, Calendar, Download, Printer, Mail, Eye } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Package, AlertTriangle, TrendingDown, Calendar, Download, Printer, Mail, Eye, Search } from "lucide-react";
 import { products, formatCurrency } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
@@ -36,6 +37,7 @@ const Inventory = () => {
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
   // Générer les rapports d'inventaire automatiquement
@@ -232,7 +234,14 @@ const Inventory = () => {
     }
   };
 
-  const filteredReports = reports.filter(report => report.type === selectedPeriod);
+  const filteredReports = reports.filter(report => {
+    const matchesPeriod = report.type === selectedPeriod;
+    const matchesSearch = searchTerm === "" ||
+      report.period.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.date.includes(searchTerm) ||
+      report.items.some(item => item.productName.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesPeriod && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
@@ -244,16 +253,6 @@ const Inventory = () => {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Select value={selectedPeriod} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setSelectedPeriod(value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="daily">Journalier</SelectItem>
-              <SelectItem value="weekly">Hebdomadaire</SelectItem>
-              <SelectItem value="monthly">Mensuel</SelectItem>
-            </SelectContent>
-          </Select>
           <Button variant="outline">
             <Calendar className="mr-2 h-4 w-4" />
             {selectedPeriod === 'daily' ? 'Aujourd\'hui' : selectedPeriod === 'weekly' ? 'Cette semaine' : 'Ce mois'}
@@ -323,38 +322,129 @@ const Inventory = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredReports.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Aucun inventaire {selectedPeriod === 'daily' ? 'journalier' : selectedPeriod === 'weekly' ? 'hebdomadaire' : 'mensuel'} disponible
+          <Tabs value={selectedPeriod} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setSelectedPeriod(value)} className="w-full">
+            <div className="flex items-center justify-between mb-4">
+              <TabsList>
+                <TabsTrigger value="daily">Journalier</TabsTrigger>
+                <TabsTrigger value="weekly">Hebdomadaire</TabsTrigger>
+                <TabsTrigger value="monthly">Mensuel</TabsTrigger>
+              </TabsList>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Rechercher un inventaire..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-64"
+                />
               </div>
-            ) : (
-              filteredReports.map((report) => (
-                <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <p className="font-medium">{report.period}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
-                    </p>
+            </div>
+
+            <TabsContent value="daily" className="mt-0">
+              <div className="space-y-4">
+                {filteredReports.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Aucun inventaire journalier disponible
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => { setSelectedReport(report); setViewOpen(true); }}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => printInventory(report)}>
-                      <Printer className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
-                      <Mail className="h-4 w-4" />
-                    </Button>
+                ) : (
+                  filteredReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="space-y-1">
+                        <p className="font-medium">{report.period}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedReport(report); setViewOpen(true); }}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => printInventory(report)}>
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="weekly" className="mt-0">
+              <div className="space-y-4">
+                {filteredReports.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Aucun inventaire hebdomadaire disponible
                   </div>
-                </div>
-              ))
-            )}
-          </div>
+                ) : (
+                  filteredReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="space-y-1">
+                        <p className="font-medium">{report.period}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedReport(report); setViewOpen(true); }}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => printInventory(report)}>
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="monthly" className="mt-0">
+              <div className="space-y-4">
+                {filteredReports.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Aucun inventaire mensuel disponible
+                  </div>
+                ) : (
+                  filteredReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="space-y-1">
+                        <p className="font-medium">{report.period}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setSelectedReport(report); setViewOpen(true); }}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => printInventory(report)}>
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

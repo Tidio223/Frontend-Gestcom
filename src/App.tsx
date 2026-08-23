@@ -15,6 +15,7 @@ import Statistics from "./pages/Statistics";
 import Reports from "./pages/Reports";
 import Invoices from "./pages/Invoices";
 import Admin from "./pages/Admin";
+import Financial from "./pages/Financial";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,7 +43,7 @@ const App = () => (
               <Route
                 path="/statistics"
                 element={
-                  <ProtectedRoute requireAdmin>
+                  <ProtectedRoute requireGerant>
                     <Statistics />
                   </ProtectedRoute>
                 }
@@ -50,12 +51,20 @@ const App = () => (
               <Route
                 path="/reports"
                 element={
-                  <ProtectedRoute requireAdmin>
+                  <ProtectedRoute requireGerant>
                     <Reports />
                   </ProtectedRoute>
                 }
               />
               <Route path="/invoices" element={<Invoices />} />
+              <Route
+                path="/financial"
+                element={
+                  <ProtectedRoute requireGerant>
+                    <Financial />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/admin"
                 element={

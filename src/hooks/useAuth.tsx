@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+
 type AppRole = "admin" | "gerant" | "caissier";
 
 interface User {
@@ -30,7 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const token = localStorage.getItem("token");
     if (token) {
       // Vérifier si le token est valide
-      fetch("http://localhost:5001/api/auth/me", {
+      fetch(`${API_BASE_URL}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -55,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const response = await fetch("http://localhost:5001/api/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -66,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
 
       if (data.success) {
-        localStorage.setItem("token", data.token);
+        localStorage.setItem("token", data.data.token);
         setUser(data.data);
         setRole(data.data.role);
         return { error: null };

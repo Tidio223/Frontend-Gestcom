@@ -4,9 +4,10 @@ import { useAuth } from "@/hooks/useAuth";
 interface Props {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  requireGerant?: boolean;
 }
 
-const ProtectedRoute = ({ children, requireAdmin = false }: Props) => {
+const ProtectedRoute = ({ children, requireAdmin = false, requireGerant = false }: Props) => {
   const { user, role, loading } = useAuth();
   const location = useLocation();
 
@@ -23,6 +24,10 @@ const ProtectedRoute = ({ children, requireAdmin = false }: Props) => {
   }
 
   if (requireAdmin && role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+
+  if (requireGerant && role !== "admin" && role !== "gerant") {
     return <Navigate to="/" replace />;
   }
 

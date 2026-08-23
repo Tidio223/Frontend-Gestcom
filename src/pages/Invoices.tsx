@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Search, Plus, Eye, Printer, Download, Mail, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Eye, Printer, Download, Edit, Trash2, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,11 +29,21 @@ const Invoices = () => {
   const { toast } = useToast();
   const location = useLocation();
 
+  // Charger les factures depuis localStorage au démarrage
+  useEffect(() => {
+    const savedInvoices = localStorage.getItem('invoices');
+    if (savedInvoices) {
+      setInvoiceList(JSON.parse(savedInvoices));
+    }
+  }, []);
+
   // Gérer les nouvelles factures depuis les ventes
   useEffect(() => {
     if (location.state?.newInvoice) {
       const newInvoice = location.state.newInvoice;
-      setInvoiceList((prev) => [newInvoice, ...prev]);
+      const updatedList = [newInvoice, ...invoiceList];
+      setInvoiceList(updatedList);
+      localStorage.setItem('invoices', JSON.stringify(updatedList));
       setViewInvoice(newInvoice);
       // Nettoyer l'état pour éviter les doublons
       window.history.replaceState({}, document.title);
@@ -77,9 +87,19 @@ const Invoices = () => {
 
   const deleteInvoice = (invoice: Invoice) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.number} ?`)) {
-      setInvoiceList((prev) => prev.filter((inv) => inv.id !== invoice.id));
+      const updatedList = invoiceList.filter((inv) => inv.id !== invoice.id);
+      setInvoiceList(updatedList);
+      localStorage.setItem('invoices', JSON.stringify(updatedList));
       toast({ title: "Facture supprimée", description: `La facture ${invoice.number} a été supprimée` });
     }
+  };
+
+  const markAsPaid = (invoice: Invoice) => {
+    const updatedInvoice = { ...invoice, status: "paid" as const };
+    const updatedList = invoiceList.map((inv) => inv.id === invoice.id ? updatedInvoice : inv);
+    setInvoiceList(updatedList);
+    localStorage.setItem('invoices', JSON.stringify(updatedList));
+    toast({ title: "Facture payée", description: `${invoice.number} est maintenant prise en compte dans les rapports` });
   };
 
   const updateInvoice = (invoice: Invoice) => {
@@ -98,11 +118,19 @@ const Invoices = () => {
       const updatedInvoice: Invoice = {
         ...editingInvoice,
         client: fd.get("client") as string,
+        status: fd.get("status") as string || editingInvoice.status,
         items,
         total: items.reduce((s, i) => s + i.total, 0),
       };
-      setInvoiceList((prev) => prev.map((inv) => inv.id === editingInvoice.id ? updatedInvoice : inv));
-      toast({ title: "Facture modifiée", description: `${updatedInvoice.number} mise à jour` });
+      const updatedList = invoiceList.map((inv) => inv.id === editingInvoice.id ? updatedInvoice : inv);
+      setInvoiceList(updatedList);
+      localStorage.setItem('invoices', JSON.stringify(updatedList));
+      
+      if (updatedInvoice.status === "paid" && editingInvoice.status !== "paid") {
+        toast({ title: "Facture payée", description: `${updatedInvoice.number} est maintenant prise en compte dans les rapports` });
+      } else {
+        toast({ title: "Facture modifiée", description: `${updatedInvoice.number} mise à jour` });
+      }
       setEditingInvoice(null);
     } else {
       // Mode création
@@ -115,7 +143,9 @@ const Invoices = () => {
         total: items.reduce((s, i) => s + i.total, 0),
         status: "pending",
       };
-      setInvoiceList((prev) => [newInvoice, ...prev]);
+      const updatedList = [newInvoice, ...invoiceList];
+      setInvoiceList(updatedList);
+      localStorage.setItem('invoices', JSON.stringify(updatedList));
       toast({ title: "Facture créée", description: `${newInvoice.number} pour ${newInvoice.client}` });
     }
     
@@ -190,15 +220,6 @@ const Invoices = () => {
     toast({ title: "Impression lancée", description: `Facture ${invoice.number} prête à être imprimée` });
   };
 
-  const sendEmail = async (invoice: Invoice) => {
-    try {
-      // Simulation d'envoi d'email
-      toast({ title: "Email envoyé", description: `Facture ${invoice.number} envoyée à ${invoice.client}` });
-    } catch (error) {
-      toast({ title: "Erreur", description: "Impossible d'envoyer l'email", variant: "destructive" });
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -231,6 +252,21 @@ const Invoices = () => {
                 required 
               />
             </div>
+            {editingInvoice && (
+              <div>
+                <Label>Statut</Label>
+                <Select name="status" defaultValue={editingInvoice.status}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">En attente</SelectItem>
+                    <SelectItem value="paid">Payée</SelectItem>
+                    <SelectItem value="overdue">En retard</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label>Articles</Label>
@@ -298,6 +334,11 @@ const Invoices = () => {
                       <Button variant="ghost" size="sm" onClick={() => setViewInvoice(inv)}>
                         <Eye className="h-4 w-4" />
                       </Button>
+                      {inv.status === "pending" && (
+                        <Button variant="ghost" size="sm" onClick={() => markAsPaid(inv)} title="Marquer comme payée">
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => updateInvoice(inv)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -306,9 +347,6 @@ const Invoices = () => {
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => generatePDF(inv)}>
                         <Download className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => sendEmail(inv)}>
-                        <Mail className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => deleteInvoice(inv)}>
                         <Trash2 className="h-4 w-4" />
@@ -327,48 +365,48 @@ const Invoices = () => {
           <DialogHeader><DialogTitle>Facture {viewInvoice?.number}</DialogTitle></DialogHeader>
           {viewInvoice && (
             <>
-              <div id={`invoice-${viewInvoice.id}`} className="p-6 bg-white" style={{ fontFamily: 'Arial, sans-serif' }}>
-                <div className="text-center border-b-2 border-black pb-4 mb-6">
-                  <h1 className="text-3xl font-bold">FACTURE</h1>
-                  <p className="text-lg">N° {viewInvoice.number}</p>
+              <div id={`invoice-${viewInvoice.id}`} className="p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <div className="text-center border-b-2 border-gray-900 pb-4 mb-6">
+                  <h1 className="text-3xl font-bold text-gray-900">FACTURE</h1>
+                  <p className="text-lg text-gray-900">N° {viewInvoice.number}</p>
                   <p className="text-sm text-gray-600">Date: {new Date(viewInvoice.date).toLocaleDateString('fr-FR')}</p>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-8 mb-6">
                   <div>
-                    <h3 className="font-bold mb-2">Émetteur</h3>
-                    <p className="text-sm">GestCom</p>
-                    <p className="text-sm">123 Rue de la République</p>
-                    <p className="text-sm">75001 Paris</p>
-                    <p className="text-sm">Tél: 01 23 45 67 89</p>
-                    <p className="text-sm">Email: contact@gestcom.com</p>
+                    <h3 className="font-bold mb-2 text-gray-900">Émetteur</h3>
+                    <p className="text-sm text-gray-900">GestCom</p>
+                    <p className="text-sm text-gray-900">123 Rue de la République</p>
+                    <p className="text-sm text-gray-900">75001 Paris</p>
+                    <p className="text-sm text-gray-900">Tél: 01 23 45 67 89</p>
+                    <p className="text-sm text-gray-900">Email: contact@gestcom.com</p>
                   </div>
                   <div>
-                    <h3 className="font-bold mb-2">Destinataire</h3>
-                    <p className="text-sm font-medium">{viewInvoice.client}</p>
-                    <p className="text-sm">Adresse du client</p>
-                    <p className="text-sm">Ville, Code postal</p>
+                    <h3 className="font-bold mb-2 text-gray-900">Destinataire</h3>
+                    <p className="text-sm font-medium text-gray-900">{viewInvoice.client}</p>
+                    <p className="text-sm text-gray-600">Adresse du client</p>
+                    <p className="text-sm text-gray-600">Ville, Code postal</p>
                   </div>
                 </div>
 
                 <div className="mb-6">
-                  <h3 className="font-bold mb-3">Détail des produits/services</h3>
+                  <h3 className="font-bold mb-3 text-gray-900">Détail des produits/services</h3>
                   <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-100">
-                        <th className="border border-gray-300 px-4 py-2 text-left font-bold">Désignation</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center font-bold">Quantité</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right font-bold">Prix unitaire HT</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right font-bold">Total</th>
+                        <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-900">Désignation</th>
+                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Quantité</th>
+                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Prix unitaire HT</th>
+                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {viewInvoice.items.map((item, i) => (
                         <tr key={i}>
-                          <td className="border border-gray-300 px-4 py-2">{item.productName}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-center">{item.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-gray-900">{item.productName}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.quantity}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-right text-gray-900">{formatCurrency(item.unitPrice)}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(item.total)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -376,18 +414,18 @@ const Invoices = () => {
                 </div>
 
                 <div className="flex justify-end mb-6">
-                  <div className="border border-gray-300 p-4 w-64">
+                  <div className="border border-gray-300 p-4 w-64 bg-gray-50">
                     <div className="flex justify-between">
-                      <span className="font-bold text-lg">Total:</span>
-                      <span className="font-bold text-lg">{formatCurrency(viewInvoice.total)}</span>
+                      <span className="font-bold text-lg text-gray-900">Total:</span>
+                      <span className="font-bold text-lg text-gray-900">{formatCurrency(viewInvoice.total)}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="border-t border-gray-300 pt-4 text-xs text-gray-600">
-                  <p className="mb-2"><strong>Mentions légales:</strong></p>
-                  <p className="mb-1">En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.</p>
-                  <p>TVA non applicable, art. 293 B du CGI</p>
+                  <p className="mb-2 text-gray-900"><strong>Mentions légales:</strong></p>
+                  <p className="mb-1 text-gray-600">En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.</p>
+                  <p className="text-gray-600">TVA non applicable, art. 293 B du CGI</p>
                 </div>
               </div>
               
@@ -399,10 +437,6 @@ const Invoices = () => {
                 <Button onClick={() => generatePDF(viewInvoice)}>
                   <Download className="mr-2 h-4 w-4" />
                   Télécharger PDF
-                </Button>
-                <Button onClick={() => sendEmail(viewInvoice)}>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Envoyer par email
                 </Button>
               </div>
             </>

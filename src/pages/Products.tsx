@@ -1,29 +1,166 @@
-import { useState } from "react";
-import { Search, Plus, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Plus, AlertTriangle, Edit, Trash2, History, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { products as initialProducts, Product, formatCurrency } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+
+interface StockMovement {
+  _id: string;
+  type: 'entry' | 'exit' | 'adjustment';
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  reason?: string;
+  createdAt: string;
+  user: {
+    name: string;
+    email: string;
+  };
+}
 
 const Products = () => {
   const [productList, setProductList] = useState<Product[]>(initialProducts);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [stockManagementOpen, setStockManagementOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [stockManagementType, setStockManagementType] = useState<'entry' | 'exit'>('entry');
+  const [stockManagementQuantity, setStockManagementQuantity] = useState(1);
+  const [stockManagementReason, setStockManagementReason] = useState("");
+  const [stockManagementProductId, setStockManagementProductId] = useState("");
   const { toast } = useToast();
+
+  // Charger les produits depuis l'API au démarrage
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/api/products`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // Transformer les données de l'API pour correspondre à l'interface Product
+          const transformedProducts = data.data.map((p: any) => ({
+            id: p._id,
+            name: p.name,
+            category: p.category,
+            price: p.price,
+            stock: p.stock,
+            minStock: p.minStock,
+            unit: 'unité', // Valeur par défaut si non fournie
+          }));
+          setProductList(transformedProducts);
+        } else {
+          // Fallback vers localStorage si l'API échoue
+          const savedProducts = localStorage.getItem('products');
+          if (savedProducts) {
+            setProductList(JSON.parse(savedProducts));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        // Fallback vers localStorage en cas d'erreur
+        const savedProducts = localStorage.getItem('products');
+        if (savedProducts) {
+          setProductList(JSON.parse(savedProducts));
+        }
+      }
+    };
+    fetchProducts();
+  }, []);
 
   const filtered = productList.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAdd = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const newProduct: Product = {
-      id: String(Date.now()),
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({ title: "Erreur", description: "Vous devez être connecté pour ajouter un produit", variant: "destructive" });
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: fd.get("name"),
+          category: fd.get("category"),
+          price: Number(fd.get("price")),
+          stock: Number(fd.get("stock")),
+          minStock: Number(fd.get("minStock")),
+          unit: fd.get("unit"),
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newProduct: Product = {
+          id: data.data._id,
+          name: data.data.name,
+          category: data.data.category,
+          price: data.data.price,
+          stock: data.data.stock,
+          minStock: data.data.minStock,
+          unit: data.data.unit || 'unité',
+        };
+        const updatedList = [newProduct, ...productList];
+        setProductList(updatedList);
+        localStorage.setItem('products', JSON.stringify(updatedList));
+        setOpen(false);
+        toast({ title: "Produit ajouté", description: `${newProduct.name} a été ajouté au stock.` });
+      } else {
+        const error = await response.json();
+        toast({ title: "Erreur", description: error.message || "Impossible d'ajouter le produit", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error adding product:', error);
+      // Fallback vers localStorage si l'API échoue
+      const newProduct: Product = {
+        id: String(Date.now()),
+        name: fd.get("name") as string,
+        category: fd.get("category") as string,
+        price: Number(fd.get("price")),
+        stock: Number(fd.get("stock")),
+        minStock: Number(fd.get("minStock")),
+        unit: fd.get("unit") as string,
+      };
+      const updatedList = [newProduct, ...productList];
+      setProductList(updatedList);
+      localStorage.setItem('products', JSON.stringify(updatedList));
+      setOpen(false);
+      toast({ title: "Produit ajouté (local)", description: `${newProduct.name} a été ajouté localement.` });
+    }
+  };
+
+  const handleEdit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedProduct) return;
+    const fd = new FormData(e.currentTarget);
+    const updatedProduct: Product = {
+      ...selectedProduct,
       name: fd.get("name") as string,
       category: fd.get("category") as string,
       price: Number(fd.get("price")),
@@ -31,9 +168,146 @@ const Products = () => {
       minStock: Number(fd.get("minStock")),
       unit: fd.get("unit") as string,
     };
-    setProductList((prev) => [newProduct, ...prev]);
-    setOpen(false);
-    toast({ title: "Produit ajouté", description: `${newProduct.name} a été ajouté au stock.` });
+    const updatedList = productList.map((p) => (p.id === selectedProduct.id ? updatedProduct : p));
+    setProductList(updatedList);
+    localStorage.setItem('products', JSON.stringify(updatedList));
+    setEditOpen(false);
+    setSelectedProduct(null);
+    toast({ title: "Produit modifié", description: `${updatedProduct.name} a été mis à jour.` });
+  };
+
+  const handleDelete = () => {
+    if (!selectedProduct) return;
+    const updatedList = productList.filter((p) => p.id !== selectedProduct.id);
+    setProductList(updatedList);
+    localStorage.setItem('products', JSON.stringify(updatedList));
+    setDeleteOpen(false);
+    setSelectedProduct(null);
+    toast({ title: "Produit supprimé", description: `${selectedProduct.name} a été supprimé du stock.` });
+  };
+
+  const openEditDialog = (product: Product) => {
+    setSelectedProduct(product);
+    setEditOpen(true);
+  };
+
+  const openDeleteDialog = (product: Product) => {
+    setSelectedProduct(product);
+    setDeleteOpen(true);
+  };
+
+  const openStockManagementDialog = () => {
+    setStockManagementType('entry');
+    setStockManagementQuantity(1);
+    setStockManagementReason('');
+    setStockManagementProductId('');
+    setStockManagementOpen(true);
+  };
+
+  const openHistoryDialog = async (product: Product) => {
+    setSelectedProduct(product);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({ title: "Erreur", description: "Veuillez vous reconnecter", variant: "destructive" });
+        return;
+      }
+      const response = await fetch(`${API_BASE_URL}/api/stock/movements/product/${product.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Historique response:', data);
+        setMovements(data.data || []);
+        setHistoryOpen(true);
+      } else if (response.status === 401) {
+        toast({ title: "Erreur", description: "Session expirée, veuillez vous reconnecter", variant: "destructive" });
+      } else if (response.status === 404) {
+        toast({ title: "Erreur", description: "Aucun mouvement trouvé pour ce produit", variant: "destructive" });
+        setMovements([]);
+        setHistoryOpen(true);
+      } else {
+        const error = await response.json();
+        console.error('Historique error:', error);
+        toast({ title: "Erreur", description: error.message || "Impossible de charger l'historique", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error fetching movements:', error);
+      toast({ title: "Erreur", description: "Erreur de connexion", variant: "destructive" });
+    }
+  };
+
+  const handleStockMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockManagementProductId) {
+      toast({ title: "Erreur", description: "Veuillez sélectionner un produit", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/stock/movements`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productId: stockManagementProductId,
+          type: stockManagementType,
+          quantity: stockManagementQuantity,
+          reason: stockManagementReason,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const updatedProduct = data.data.product;
+        
+        // Update the product in the list
+        const updatedList = productList.map((p) => 
+          p.id === stockManagementProductId ? { ...p, stock: updatedProduct.stock } : p
+        );
+        setProductList(updatedList);
+        localStorage.setItem('products', JSON.stringify(updatedList));
+        
+        setStockManagementOpen(false);
+        toast({ 
+          title: "Mouvement enregistré", 
+          description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités` 
+        });
+      } else {
+        const error = await response.json();
+        console.error('Stock movement error:', error);
+        if (response.status === 401) {
+          toast({ title: "Erreur", description: "Session expirée, veuillez vous reconnecter", variant: "destructive" });
+        } else {
+          throw new Error(error.message || "Erreur lors du mouvement");
+        }
+      }
+    } catch (error) {
+      console.error('Error creating movement:', error);
+      // Fallback vers localStorage si l'API échoue
+      const updatedList = productList.map((p) => {
+        if (p.id === stockManagementProductId) {
+          const newStock = stockManagementType === 'entry' 
+            ? p.stock + stockManagementQuantity 
+            : Math.max(0, p.stock - stockManagementQuantity);
+          return { ...p, stock: newStock };
+        }
+        return p;
+      });
+      setProductList(updatedList);
+      localStorage.setItem('products', JSON.stringify(updatedList));
+      
+      setStockManagementOpen(false);
+      toast({ 
+        title: "Mouvement enregistré (local)", 
+        description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités` 
+      });
+    }
   };
 
   return (
@@ -43,22 +317,66 @@ const Products = () => {
           <h1 className="font-display text-3xl font-bold text-foreground">Produits & Stock</h1>
           <p className="mt-1 text-muted-foreground">Gérez votre inventaire et suivez les niveaux de stock</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={stockManagementOpen} onOpenChange={setStockManagementOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Ajouter un produit</Button>
+            <Button><Package className="mr-2 h-4 w-4" />Gérer le stock</Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Nouveau produit</DialogTitle></DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><Label>Nom</Label><Input name="name" required /></div>
-                <div><Label>Catégorie</Label><Input name="category" required /></div>
-                <div><Label>Unité</Label><Input name="unit" placeholder="kg, m, pièce..." required /></div>
-                <div><Label>Prix unitaire</Label><Input name="price" type="number" required /></div>
-                <div><Label>Stock initial</Label><Input name="stock" type="number" required /></div>
-                <div><Label>Stock minimum</Label><Input name="minStock" type="number" required /></div>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Gérer le stock</DialogTitle></DialogHeader>
+            <form onSubmit={handleStockMovement} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Produit</Label>
+                <Select value={stockManagementProductId} onValueChange={setStockManagementProductId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un produit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productList.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} (Stock: {p.stock} {p.unit})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Button type="submit" className="w-full">Ajouter</Button>
+              <div className="space-y-2">
+                <Label>Type de mouvement</Label>
+                <Select value={stockManagementType} onValueChange={(value: 'entry' | 'exit') => setStockManagementType(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="entry">Entrée de stock</SelectItem>
+                    <SelectItem value="exit">Sortie de stock</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Quantité</Label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={stockManagementQuantity} 
+                  onChange={(e) => setStockManagementQuantity(Number(e.target.value))}
+                  required 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Raison (optionnel)</Label>
+                <Input 
+                  value={stockManagementReason} 
+                  onChange={(e) => setStockManagementReason(e.target.value)}
+                  placeholder="Ex: Réception fournisseur, Vente, etc."
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setStockManagementOpen(false)} className="flex-1">
+                  Annuler
+                </Button>
+                <Button type="submit" className="flex-1">
+                  Enregistrer
+                </Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -83,11 +401,12 @@ const Products = () => {
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">Prix</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stock</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground">Statut</th>
+              <th className="px-4 py-3 text-center font-medium text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((p) => {
-              const isLow = p.stock <= p.minStock;
+              const isLow = p.stock < p.minStock;
               return (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium text-card-foreground">{p.name}</td>
@@ -108,12 +427,175 @@ const Products = () => {
                       <Badge variant="outline" className="border-success/40 bg-success/10 text-success">En stock</Badge>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openHistoryDialog(p)}
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
+                        title="Historique"
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(p)}
+                        className="h-8 w-8 p-0 text-primary hover:text-primary/80"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDeleteDialog(p)}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive/80"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Dialogue d'édition */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier le produit</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && (
+            <form onSubmit={handleEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Label>Nom</Label>
+                  <Input name="name" defaultValue={selectedProduct.name} required />
+                </div>
+                <div>
+                  <Label>Catégorie</Label>
+                  <Input name="category" defaultValue={selectedProduct.category} required />
+                </div>
+                <div>
+                  <Label>Unité</Label>
+                  <Input name="unit" defaultValue={selectedProduct.unit} placeholder="kg, m, pièce..." required />
+                </div>
+                <div>
+                  <Label>Prix unitaire</Label>
+                  <Input name="price" type="number" defaultValue={selectedProduct.price} required />
+                </div>
+                <div>
+                  <Label>Stock initial</Label>
+                  <Input name="stock" type="number" defaultValue={selectedProduct.stock} required />
+                </div>
+                <div>
+                  <Label>Stock minimum</Label>
+                  <Input name="minStock" type="number" defaultValue={selectedProduct.minStock} required />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)} className="flex-1">
+                  Annuler
+                </Button>
+                <Button type="submit" className="flex-1">
+                  Enregistrer
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue de suppression */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer le produit</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && (
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                Êtes-vous sûr de vouloir supprimer le produit <strong>{selectedProduct.name}</strong> ?
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1">
+                  Annuler
+                </Button>
+                <Button type="button" variant="destructive" onClick={handleDelete} className="flex-1">
+                  Supprimer
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue d'historique des mouvements */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Historique des mouvements</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{selectedProduct.name}</p>
+                  <p className="text-sm text-muted-foreground">Stock actuel: {selectedProduct.stock} {selectedProduct.unit}</p>
+                </div>
+              </div>
+              {movements.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Aucun mouvement enregistré</p>
+              ) : (
+                <div className="space-y-2">
+                  {movements.map((movement) => (
+                    <div key={movement._id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-full ${
+                          movement.type === 'entry' ? 'bg-green-100 text-green-600' : 
+                          movement.type === 'exit' ? 'bg-orange-100 text-orange-600' : 
+                          'bg-blue-100 text-blue-600'
+                        }`}>
+                          {movement.type === 'entry' ? <History className="h-4 w-4" /> : 
+                           movement.type === 'exit' ? <History className="h-4 w-4" /> : 
+                           <History className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <p className="font-medium">
+                            {movement.type === 'entry' ? 'Entrée' : 
+                             movement.type === 'exit' ? 'Sortie' : 'Ajustement'} de {movement.quantity} unités
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {movement.previousStock} → {movement.newStock}
+                          </p>
+                          {movement.reason && (
+                            <p className="text-xs text-muted-foreground">{movement.reason}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right text-sm">
+                        <p className="text-muted-foreground">
+                          {new Date(movement.createdAt).toLocaleDateString('fr-FR')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(movement.createdAt).toLocaleTimeString('fr-FR')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {movement.user?.name}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
