@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Loader2, Mail, Lock, Eye, EyeOff, X } from "lucide-react";
@@ -29,6 +29,16 @@ const Auth = () => {
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetSubmitting, setResetSubmitting] = useState(false);
+
+  // Détecter le token de réinitialisation dans l'URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('resetToken');
+    if (token) {
+      setResetToken(token);
+      setResetPasswordOpen(true);
+    }
+  }, []);
 
   if (!loading && user) return <Navigate to="/" replace />;
 
@@ -65,10 +75,16 @@ const Auth = () => {
       });
       const data = await response.json();
       if (data.success) {
-        toast.success("Token de réinitialisation généré");
-        setResetToken(data.data.resetToken);
-        setForgotPasswordOpen(false);
-        setResetPasswordOpen(true);
+        toast.success("Email de réinitialisation envoyé");
+        if (data.data && data.data.resetToken) {
+          // Mode développement : email non envoyé, on garde le token
+          setResetToken(data.data.resetToken);
+          setForgotPasswordOpen(false);
+          setResetPasswordOpen(true);
+        } else {
+          // Mode production : email envoyé
+          setForgotPasswordOpen(false);
+        }
       } else {
         toast.error(data.message || "Erreur lors de la demande");
       }
@@ -243,7 +259,7 @@ const Auth = () => {
                   Envoi en cours...
                 </>
               ) : (
-                "Envoyer le token"
+                "Envoyer le mail"
               )}
             </Button>
           </form>
