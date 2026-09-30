@@ -90,72 +90,66 @@ const Inventory = () => {
     const lastMonday = new Date(today);
     lastMonday.setDate(today.getDate() - dayOfWeek - 7);
     
-    if (dayOfWeek === 1) { // Lundi
-      const dateStr = lastMonday.toISOString().split('T')[0];
-      const mockWeeklySales = [
-        { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 25, unitPrice: 8500 },
-        { productId: '4', productName: 'Tuyau PVC 110mm', quantitySold: 15, unitPrice: 3500 },
-      ];
-      
-      const weeklyReport: InventoryReport = {
-        id: `weekly-${dateStr}`,
-        date: dateStr,
-        type: 'weekly',
-        period: `Inventaire semaine du ${lastMonday.toLocaleDateString('fr-FR')}`,
-        items: mockWeeklySales.map(item => ({
-          ...item,
-          total: item.quantitySold * item.unitPrice
-        })),
-        totalSales: mockWeeklySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
-        totalValue: mockWeeklySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0)
-      };
-      
-      setReports(prev => {
-        const exists = prev.find(r => r.id === weeklyReport.id);
-        if (!exists) {
-          return [...prev, weeklyReport];
-        }
-        return prev;
-      });
-    }
+    const dateStr = lastMonday.toISOString().split('T')[0];
+    const mockWeeklySales = [
+      { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 25, unitPrice: 8500 },
+      { productId: '4', productName: 'Tuyau PVC 110mm', quantitySold: 15, unitPrice: 3500 },
+    ];
+    
+    const weeklyReport: InventoryReport = {
+      id: `weekly-${dateStr}`,
+      date: dateStr,
+      type: 'weekly',
+      period: `Inventaire semaine du ${lastMonday.toLocaleDateString('fr-FR')}`,
+      items: mockWeeklySales.map(item => ({
+        ...item,
+        total: item.quantitySold * item.unitPrice
+      })),
+      totalSales: mockWeeklySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
+      totalValue: mockWeeklySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0)
+    };
+    
+    setReports(prev => {
+      const exists = prev.find(r => r.id === weeklyReport.id);
+      if (!exists) {
+        return [...prev, weeklyReport];
+      }
+      return prev;
+    });
   };
 
   const generateMonthlyInventory = () => {
     const today = new Date();
-    const isFirstOfMonth = today.getDate() === 1;
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const dateStr = lastMonth.toISOString().split('T')[0];
     
-    if (isFirstOfMonth) {
-      const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const dateStr = lastMonth.toISOString().split('T')[0];
-      
-      const mockMonthlySales = [
-        { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 120, unitPrice: 8500 },
-        { productId: '2', productName: 'Fer à béton 10mm', quantitySold: 80, unitPrice: 4200 },
-        { productId: '3', productName: 'Peinture Acrylique 20L', quantitySold: 45, unitPrice: 18000 },
-        { productId: '6', productName: 'Carrelage 40x40cm', quantitySold: 200, unitPrice: 6800 },
-      ];
-      
-      const monthlyReport: InventoryReport = {
-        id: `monthly-${dateStr}`,
-        date: dateStr,
-        type: 'monthly',
-        period: `Inventaire ${lastMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
-        items: mockMonthlySales.map(item => ({
-          ...item,
-          total: item.quantitySold * item.unitPrice
-        })),
-        totalSales: mockMonthlySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
-        totalValue: mockMonthlySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0)
-      };
-      
-      setReports(prev => {
-        const exists = prev.find(r => r.id === monthlyReport.id);
-        if (!exists) {
-          return [...prev, monthlyReport];
-        }
-        return prev;
-      });
-    }
+    const mockMonthlySales = [
+      { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 120, unitPrice: 8500 },
+      { productId: '2', productName: 'Fer à béton 10mm', quantitySold: 80, unitPrice: 4200 },
+      { productId: '3', productName: 'Peinture Acrylique 20L', quantitySold: 45, unitPrice: 18000 },
+      { productId: '6', productName: 'Carrelage 40x40cm', quantitySold: 200, unitPrice: 6800 },
+    ];
+    
+    const monthlyReport: InventoryReport = {
+      id: `monthly-${dateStr}`,
+      date: dateStr,
+      type: 'monthly',
+      period: `Inventaire ${lastMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
+      items: mockMonthlySales.map(item => ({
+        ...item,
+        total: item.quantitySold * item.unitPrice
+      })),
+      totalSales: mockMonthlySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
+      totalValue: mockMonthlySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0)
+    };
+    
+    setReports(prev => {
+      const exists = prev.find(r => r.id === monthlyReport.id);
+      if (!exists) {
+        return [...prev, monthlyReport];
+      }
+      return prev;
+    });
   };
 
   const generatePDF = async (report: InventoryReport) => {
@@ -255,7 +249,7 @@ const Inventory = () => {
         <div className="flex items-center space-x-2">
           <Button variant="outline">
             <Calendar className="mr-2 h-4 w-4" />
-            {selectedPeriod === 'daily' ? 'Aujourd\'hui' : selectedPeriod === 'weekly' ? 'Cette semaine' : 'Ce mois'}
+            {selectedPeriod === 'daily' ? 'Hier' : selectedPeriod === 'weekly' ? 'Semaine dernière' : 'Mois dernier'}
           </Button>
         </div>
       </div>
@@ -454,65 +448,78 @@ const Inventory = () => {
             <DialogTitle>{selectedReport?.period}</DialogTitle>
           </DialogHeader>
           {selectedReport && (
-            <div id={`inventory-${selectedReport.id}`} className="p-6 bg-white" style={{ fontFamily: 'Arial, sans-serif' }}>
-              <div className="text-center border-b-2 border-black pb-4 mb-6">
-                <h2 className="text-2xl font-bold">RAPPORT D'INVENTAIRE</h2>
-                <p className="text-lg">{selectedReport.period}</p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-8 mb-6">
-                <div>
-                  <h3 className="font-bold mb-2">Résumé</h3>
-                  <p className="text-sm">Nombre de produits: {selectedReport.items.length}</p>
-                  <p className="text-sm">Ventes totales: {formatCurrency(selectedReport.totalValue)}</p>
-                  <p className="text-sm">Date: {new Date(selectedReport.date).toLocaleDateString('fr-FR')}</p>
+            <>
+              <div id={`inventory-${selectedReport.id}`} className="p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <div className="text-center border-b-2 border-gray-900 pb-4 mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">RAPPORT D'INVENTAIRE</h2>
+                  <p className="text-lg text-gray-900">{selectedReport.period}</p>
                 </div>
-                <div>
-                  <h3 className="font-bold mb-2">Informations</h3>
-                  <p className="text-sm">Type: {selectedReport.type === 'daily' ? 'Journalier' : selectedReport.type === 'weekly' ? 'Hebdomadaire' : 'Mensuel'}</p>
-                  <p className="text-sm">Généré automatiquement</p>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="font-bold mb-3">Détail des ventes</h3>
-                <table className="w-full border-collapse border border-gray-300">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-300 px-4 py-2 text-left font-bold">Produit</th>
-                      <th className="border border-gray-300 px-4 py-2 text-center font-bold">Quantité vendue</th>
-                      <th className="border border-gray-300 px-4 py-2 text-right font-bold">Prix unitaire HT</th>
-                      <th className="border border-gray-300 px-4 py-2 text-right font-bold">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedReport.items.map((item, i) => (
-                      <tr key={i}>
-                        <td className="border border-gray-300 px-4 py-2">{item.productName}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-center">{item.quantitySold}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                        <td className="border border-gray-300 px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-end mb-6">
-                <div className="border border-gray-300 p-4 w-64">
-                  <div className="flex justify-between">
-                    <span className="font-bold text-lg">Total:</span>
-                    <span className="font-bold text-lg">{formatCurrency(selectedReport.totalValue)}</span>
+                
+                <div className="grid grid-cols-2 gap-8 mb-6">
+                  <div>
+                    <h3 className="font-bold mb-2 text-gray-900">Résumé</h3>
+                    <p className="text-sm text-gray-900">Nombre de produits: {selectedReport.items.length}</p>
+                    <p className="text-sm text-gray-900">Ventes totales: {formatCurrency(selectedReport.totalValue)}</p>
+                    <p className="text-sm text-gray-900">Date: {new Date(selectedReport.date).toLocaleDateString('fr-FR')}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-bold mb-2 text-gray-900">Informations</h3>
+                    <p className="text-sm text-gray-900">Type: {selectedReport.type === 'daily' ? 'Journalier' : selectedReport.type === 'weekly' ? 'Hebdomadaire' : 'Mensuel'}</p>
+                    <p className="text-sm text-gray-900">Généré automatiquement</p>
                   </div>
                 </div>
-              </div>
 
-              <div className="border-t border-gray-300 pt-4 text-xs text-gray-600">
-                <p className="mb-2"><strong>Mentions:</strong></p>
-                <p className="mb-1">Rapport généré automatiquement par GestCom</p>
-                <p>Pour toute question, contactez le service de gestion</p>
+                <div className="mb-6">
+                  <h3 className="font-bold mb-3 text-gray-900">Détail des ventes</h3>
+                  <table className="w-full border-collapse border border-gray-300">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-900">Produit</th>
+                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Quantité vendue</th>
+                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Prix unitaire HT</th>
+                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedReport.items.map((item, i) => (
+                        <tr key={i}>
+                          <td className="border border-gray-300 px-4 py-2 text-gray-900">{item.productName}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.quantitySold}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-right text-gray-900">{formatCurrency(item.unitPrice)}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(item.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end mb-6">
+                  <div className="border border-gray-300 p-4 w-64 bg-gray-50">
+                    <div className="flex justify-between">
+                      <span className="font-bold text-lg text-gray-900">Total:</span>
+                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.totalValue)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-300 pt-4 text-xs text-gray-600">
+                  <p className="mb-2 text-gray-900"><strong>Mentions:</strong></p>
+                  <p className="mb-1 text-gray-600">Rapport généré automatiquement par GestCom</p>
+                  <p className="text-gray-600">Pour toute question, contactez le service de gestion</p>
+                </div>
               </div>
-            </div>
+              
+              <div className="flex justify-center gap-2 mt-6">
+                <Button onClick={() => printInventory(selectedReport)}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimer
+                </Button>
+                <Button onClick={() => generatePDF(selectedReport)}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Télécharger PDF
+                </Button>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

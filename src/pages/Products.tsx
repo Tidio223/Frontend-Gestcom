@@ -13,17 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
 interface StockMovement {
-  _id: string;
+  id: string;
+  productId: string;
+  productName: string;
   type: 'entry' | 'exit' | 'adjustment';
   quantity: number;
   previousStock: number;
   newStock: number;
   reason?: string;
-  createdAt: string;
-  user: {
-    name: string;
-    email: string;
-  };
+  date: string;
 }
 
 const Products = () => {
@@ -36,13 +34,14 @@ const Products = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [productMovements, setProductMovements] = useState<StockMovement[]>([]);
   const [stockManagementType, setStockManagementType] = useState<'entry' | 'exit'>('entry');
   const [stockManagementQuantity, setStockManagementQuantity] = useState(1);
   const [stockManagementReason, setStockManagementReason] = useState("");
   const [stockManagementProductId, setStockManagementProductId] = useState("");
   const { toast } = useToast();
 
-  // Charger les produits depuis l'API au démarrage
+  // Charger les produits et les mouvements de stock depuis localStorage au démarrage
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -82,6 +81,12 @@ const Products = () => {
       }
     };
     fetchProducts();
+
+    // Charger les mouvements de stock depuis localStorage
+    const savedMovements = localStorage.getItem('stockMovements');
+    if (savedMovements) {
+      setMovements(JSON.parse(savedMovements));
+    }
   }, []);
 
   const filtered = productList.filter(
@@ -204,110 +209,70 @@ const Products = () => {
     setStockManagementOpen(true);
   };
 
-  const openHistoryDialog = async (product: Product) => {
+  const openHistoryDialog = (product: Product) => {
     setSelectedProduct(product);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast({ title: "Erreur", description: "Veuillez vous reconnecter", variant: "destructive" });
-        return;
-      }
-      const response = await fetch(`${API_BASE_URL}/api/stock/movements/product/${product.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Historique response:', data);
-        setMovements(data.data || []);
-        setHistoryOpen(true);
-      } else if (response.status === 401) {
-        toast({ title: "Erreur", description: "Session expirée, veuillez vous reconnecter", variant: "destructive" });
-      } else if (response.status === 404) {
-        toast({ title: "Erreur", description: "Aucun mouvement trouvé pour ce produit", variant: "destructive" });
-        setMovements([]);
-        setHistoryOpen(true);
-      } else {
-        const error = await response.json();
-        console.error('Historique error:', error);
-        toast({ title: "Erreur", description: error.message || "Impossible de charger l'historique", variant: "destructive" });
-      }
-    } catch (error) {
-      console.error('Error fetching movements:', error);
-      toast({ title: "Erreur", description: "Erreur de connexion", variant: "destructive" });
-    }
+    // Filtrer les mouvements pour ce produit
+    const filteredMovements = movements.filter(m => m.productId === product.id);
+    setProductMovements(filteredMovements);
+    setHistoryOpen(true);
   };
 
-  const handleStockMovement = async (e: React.FormEvent) => {
+  const handleStockMovement = (e: React.FormEvent) => {
     e.preventDefault();
     if (!stockManagementProductId) {
       toast({ title: "Erreur", description: "Veuillez sélectionner un produit", variant: "destructive" });
       return;
     }
 
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/stock/movements`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          productId: stockManagementProductId,
-          type: stockManagementType,
-          quantity: stockManagementQuantity,
-          reason: stockManagementReason,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const updatedProduct = data.data.product;
-        
-        // Update the product in the list
-        const updatedList = productList.map((p) => 
-          p.id === stockManagementProductId ? { ...p, stock: updatedProduct.stock } : p
-        );
-        setProductList(updatedList);
-        localStorage.setItem('products', JSON.stringify(updatedList));
-        
-        setStockManagementOpen(false);
-        toast({ 
-          title: "Mouvement enregistré", 
-          description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités` 
-        });
-      } else {
-        const error = await response.json();
-        console.error('Stock movement error:', error);
-        if (response.status === 401) {
-          toast({ title: "Erreur", description: "Session expirée, veuillez vous reconnecter", variant: "destructive" });
-        } else {
-          throw new Error(error.message || "Erreur lors du mouvement");
-        }
-      }
-    } catch (error) {
-      console.error('Error creating movement:', error);
-      // Fallback vers localStorage si l'API échoue
-      const updatedList = productList.map((p) => {
-        if (p.id === stockManagementProductId) {
-          const newStock = stockManagementType === 'entry' 
-            ? p.stock + stockManagementQuantity 
-            : Math.max(0, p.stock - stockManagementQuantity);
-          return { ...p, stock: newStock };
-        }
-        return p;
-      });
-      setProductList(updatedList);
-      localStorage.setItem('products', JSON.stringify(updatedList));
-      
-      setStockManagementOpen(false);
-      toast({ 
-        title: "Mouvement enregistré (local)", 
-        description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités` 
-      });
+    const product = productList.find(p => p.id === stockManagementProductId);
+    if (!product) {
+      toast({ title: "Erreur", description: "Produit non trouvé", variant: "destructive" });
+      return;
     }
+
+    const previousStock = product.stock;
+    const newStock = stockManagementType === 'entry' 
+      ? previousStock + stockManagementQuantity 
+      : previousStock - stockManagementQuantity;
+
+    if (newStock < 0) {
+      toast({ title: "Erreur", description: "Stock insuffisant pour cette sortie", variant: "destructive" });
+      return;
+    }
+
+    // Créer le mouvement de stock
+    const newMovement: StockMovement = {
+      id: String(Date.now()),
+      productId: stockManagementProductId,
+      productName: product.name,
+      type: stockManagementType,
+      quantity: stockManagementQuantity,
+      previousStock,
+      newStock,
+      reason: stockManagementReason,
+      date: new Date().toISOString(),
+    };
+
+    // Mettre à jour le produit
+    const updatedList = productList.map((p) => 
+      p.id === stockManagementProductId ? { ...p, stock: newStock } : p
+    );
+    setProductList(updatedList);
+    localStorage.setItem('products', JSON.stringify(updatedList));
+
+    // Sauvegarder le mouvement
+    const updatedMovements = [newMovement, ...movements];
+    setMovements(updatedMovements);
+    localStorage.setItem('stockMovements', JSON.stringify(updatedMovements));
+
+    setStockManagementOpen(false);
+    setStockManagementQuantity(1);
+    setStockManagementReason('');
+    setStockManagementProductId('');
+    toast({ 
+      title: "Mouvement enregistré", 
+      description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités pour ${product.name}` 
+    });
   };
 
   return (
@@ -406,7 +371,7 @@ const Products = () => {
           </thead>
           <tbody>
             {filtered.map((p) => {
-              const isLow = p.stock < p.minStock;
+              const isLow = p.stock <= p.minStock;
               return (
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium text-card-foreground">{p.name}</td>
@@ -548,12 +513,12 @@ const Products = () => {
                   <p className="text-sm text-muted-foreground">Stock actuel: {selectedProduct.stock} {selectedProduct.unit}</p>
                 </div>
               </div>
-              {movements.length === 0 ? (
+              {productMovements.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">Aucun mouvement enregistré</p>
               ) : (
                 <div className="space-y-2">
-                  {movements.map((movement) => (
-                    <div key={movement._id} className="flex items-center justify-between p-3 border rounded-lg">
+                  {productMovements.map((movement) => (
+                    <div key={movement.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-full ${
                           movement.type === 'entry' ? 'bg-green-100 text-green-600' : 
@@ -579,13 +544,10 @@ const Products = () => {
                       </div>
                       <div className="text-right text-sm">
                         <p className="text-muted-foreground">
-                          {new Date(movement.createdAt).toLocaleDateString('fr-FR')}
+                          {new Date(movement.date).toLocaleDateString('fr-FR')}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(movement.createdAt).toLocaleTimeString('fr-FR')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {movement.user?.name}
+                          {new Date(movement.date).toLocaleTimeString('fr-FR')}
                         </p>
                       </div>
                     </div>

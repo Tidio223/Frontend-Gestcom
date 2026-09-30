@@ -403,7 +403,7 @@ const Reports = () => {
                 { name: "Rapport de ventes mensuel", type: "sales", date: "2026-04-01", status: "Disponible", icon: DollarSign },
                 { name: "Analyse des produits", type: "inventory", date: "2026-04-15", status: "Disponible", icon: Package },
                 { name: "Rapport client", type: "customers", date: "2026-04-10", status: "Disponible", icon: Users },
-                { name: "Inventaire complet", type: "inventory", date: "2026-04-17", status: "En cours", icon: Package },
+                { name: "Inventaire complet", type: "inventory", date: "2026-04-17", status: "Disponible", icon: Package },
                 { name: "Performance trimestrielle", type: "sales", date: "2026-03-31", status: "Disponible", icon: TrendingUp },
               ].map((report, index) => (
                 <div key={index} className="flex items-center justify-between p-4 border rounded-lg">

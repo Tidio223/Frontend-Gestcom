@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut, ShoppingCart, BarChart3, Users as UsersIcon, Archive, PieChart, Wallet } from "lucide-react";
+import { LayoutDashboard, Package, FileText, TrendingUp, Shield, LogOut, ShoppingCart, BarChart3, Users as UsersIcon, Archive, PieChart, Wallet, Settings } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,12 +10,13 @@ const baseNav = [
   { to: "/sales", icon: ShoppingCart, label: "Ventes" },
   { to: "/inventory", icon: Archive, label: "Inventaires" },
   { to: "/invoices", icon: FileText, label: "Factures" },
+  { to: "/reports", icon: BarChart3, label: "Rapports" },
+  { to: "/settings", icon: Settings, label: "Paramètres" },
 ];
 
 const gerantNav = [
   ...baseNav,
   { to: "/statistics", icon: PieChart, label: "Statistiques" },
-  { to: "/reports", icon: BarChart3, label: "Rapports" },
   { to: "/financial", icon: Wallet, label: "Gestion Financière" },
 ];
 

@@ -16,6 +16,7 @@ import Reports from "./pages/Reports";
 import Invoices from "./pages/Invoices";
 import Admin from "./pages/Admin";
 import Financial from "./pages/Financial";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,15 +49,9 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/reports"
-                element={
-                  <ProtectedRoute requireGerant>
-                    <Reports />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/reports" element={<Reports />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/settings" element={<Settings />} />
               <Route
                 path="/financial"
                 element={

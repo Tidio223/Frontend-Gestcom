@@ -31,12 +31,7 @@ interface Sale {
 }
 
 const Sales = () => {
-  const [sales, setSales] = useState<Sale[]>([
-    { id: "001", customer: "Jean Dupont", amount: "245 FCFA", status: "completed", date: "2026-04-17", items: [], total: 245 },
-    { id: "002", customer: "Marie Martin", amount: "189 FCFA", status: "pending", date: "2026-04-17", items: [], total: 189 },
-    { id: "003", customer: "Pierre Bernard", amount: "412 FCFA", status: "completed", date: "2026-04-16", items: [], total: 412 },
-    { id: "004", customer: "Sophie Petit", amount: "98 FCFA", status: "completed", date: "2026-04-16", items: [], total: 98 },
-  ]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [customer, setCustomer] = useState("");
@@ -44,11 +39,28 @@ const Sales = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Charger les produits depuis localStorage au démarrage
+  // Charger les produits et les ventes depuis localStorage au démarrage
   useEffect(() => {
     const savedProducts = localStorage.getItem('products');
     if (savedProducts) {
       setProductList(JSON.parse(savedProducts));
+    }
+
+    const savedSales = localStorage.getItem('sales');
+    if (savedSales) {
+      const parsedSales = JSON.parse(savedSales);
+      // Filtrer pour ne garder que les ventes completed
+      const completedSales = parsedSales.filter((sale: Sale) => sale.status === 'completed');
+      setSales(completedSales);
+      // Mettre à jour localStorage pour supprimer les ventes en pending
+      localStorage.setItem('sales', JSON.stringify(completedSales));
+    } else {
+      // Données initiales si aucune vente sauvegardée
+      setSales([
+        { id: "001", customer: "Jean Dupont", amount: "245 FCFA", status: "completed", date: "2026-04-17", items: [], total: 245 },
+        { id: "003", customer: "Pierre Bernard", amount: "412 FCFA", status: "completed", date: "2026-04-16", items: [], total: 412 },
+        { id: "004", customer: "Sophie Petit", amount: "98 FCFA", status: "completed", date: "2026-04-16", items: [], total: 98 },
+      ]);
     }
   }, []);
   const addItem = () => {
@@ -134,6 +146,10 @@ const Sales = () => {
     setItems([]);
     setCustomer("");
     setCreateOpen(false);
+    
+    // Sauvegarder les ventes dans localStorage
+    localStorage.setItem('sales', JSON.stringify([newSale, ...sales]));
+    
     toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
 
     // Créer automatiquement la facture correspondante
