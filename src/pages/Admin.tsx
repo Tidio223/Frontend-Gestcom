@@ -30,18 +30,26 @@ import { useAuth } from "@/hooks/useAuth";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
+// Emails des comptes protégés (doivent correspondre aux variables d'environnement backend)
+const PROTECTED_EMAILS = [
+  "elhadji2013@gmail.com",
+  "bahcheick508@gmail.com"
+];
+
+const PROTECTED_ROLES = ["admin", "superadmin"];
+
 const createSchema = z.object({
   name: z.string().trim().min(1, "Nom requis").max(50),
   email: z.string().trim().email("Email invalide").max(255),
   password: z.string().min(6, "6 caractères minimum").max(100),
-  role: z.enum(["caissier", "gerant", "admin"]),
+  role: z.enum(["caissier", "gerant"]),
 });
 
 interface UserRow {
   _id: string;
   name: string;
   email: string;
-  role: "caissier" | "gerant" | "admin";
+  role: "caissier" | "gerant" | "admin" | "superadmin";
   createdAt: string;
   status?: "active" | "blocked";
 }
@@ -399,12 +407,18 @@ const Admin = () => {
                     <TableRow><TableCell colSpan={5} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
                   ) : users.map((u) => {
                     const isSelf = u._id === currentUser?._id;
+                    const isProtected = PROTECTED_EMAILS.includes(u.email);
+                    const hasProtectedRole = PROTECTED_ROLES.includes(u.role);
                     return (
                       <TableRow key={u._id}>
-                        <TableCell className="font-medium">{u.name}{isSelf && <span className="ml-2 text-xs text-muted-foreground">(vous)</span>}</TableCell>
+                        <TableCell className="font-medium">{u.name}{isSelf && <span className="ml-2 text-xs text-muted-foreground">(vous)</span>}{isProtected && <Badge variant="outline" className="ml-2 text-xs">Protégé</Badge>}</TableCell>
                         <TableCell className="text-muted-foreground">{u.email}</TableCell>
                         <TableCell>
-                          <Select value={u.role} onValueChange={(v: "caissier" | "gerant") => handleRoleChange(u, v)} disabled={isSelf}>
+                          <Select 
+                            value={u.role} 
+                            onValueChange={(v: "caissier" | "gerant") => handleRoleChange(u, v)} 
+                            disabled={isSelf || isProtected || hasProtectedRole}
+                          >
                             <SelectTrigger className="w-32 h-8">
                               <SelectValue />
                             </SelectTrigger>
@@ -424,7 +438,7 @@ const Admin = () => {
                             {u.status !== "blocked" ? (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="outline" className="text-orange-600 hover:text-orange-700" disabled={isSelf || u.role === "admin"}>
+                                  <Button size="sm" variant="outline" className="text-orange-600 hover:text-orange-700" disabled={isSelf || isProtected || hasProtectedRole}>
                                     <Ban className="h-4 w-4" />
                                   </Button>
                                 </AlertDialogTrigger>
@@ -449,13 +463,14 @@ const Admin = () => {
                                 variant="outline" 
                                 className="text-green-600 hover:text-green-700"
                                 onClick={() => handleUnblockUser(u)}
+                                disabled={isProtected || hasProtectedRole}
                               >
                                 <CheckCircle className="h-4 w-4" />
                               </Button>
                             )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={isSelf || u.role === "admin"}>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={isSelf || isProtected || hasProtectedRole}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>

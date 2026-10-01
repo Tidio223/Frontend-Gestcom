@@ -28,7 +28,7 @@ const adminNav = [
 const AppSidebar = () => {
   const location = useLocation();
   const { role, user, signOut } = useAuth();
-  const navItems = role === "admin" ? adminNav : role === "gerant" ? gerantNav : baseNav;
+  const navItems = (role === "admin" || role === "superadmin") ? adminNav : role === "gerant" ? gerantNav : baseNav;
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
