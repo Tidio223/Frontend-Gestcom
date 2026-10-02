@@ -23,11 +23,11 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireGerant = false 
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  if (requireAdmin && role !== "admin") {
+  if (requireAdmin && role !== "admin" && role !== "superadmin") {
     return <Navigate to="/" replace />;
   }
 
-  if (requireGerant && role !== "admin" && role !== "gerant") {
+  if (requireGerant && role !== "admin" && role !== "gerant" && role !== "superadmin") {
     return <Navigate to="/" replace />;
   }
 

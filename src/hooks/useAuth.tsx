@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
-type AppRole = "admin" | "gerant" | "caissier";
+type AppRole = "admin" | "gerant" | "caissier" | "superadmin";
 
 interface User {
   _id: string;
