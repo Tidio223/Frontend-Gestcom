@@ -6,10 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText } from "lucide-react";
-import { products, formatCurrency, Product } from "@/data/mock-data";
+import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
 interface SaleItem {
   productId: string;
@@ -20,14 +21,22 @@ interface SaleItem {
 }
 
 interface Sale {
-  id: string;
+  _id: string;
   customer: string;
   date: string;
   items: SaleItem[];
   total: number;
-  amount: string;
-  status: "completed" | "pending";
+  status: "pending" | "completed" | "cancelled";
   invoiceId?: string;
+  createdAt: string;
+}
+
+interface Product {
+  _id: string;
+  name: string;
+  price: number;
+  stock: number;
+  unit: string;
 }
 
 const Sales = () => {
@@ -35,40 +44,63 @@ const Sales = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [customer, setCustomer] = useState("");
-  const [productList, setProductList] = useState<Product[]>(products);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
 
-  // Charger les produits et les ventes depuis localStorage au démarrage
+  const formatCurrency = (amount: number) => {
+    return `${amount.toLocaleString('fr-FR')} FCFA`;
+  };
+
+  // Charger les produits et les ventes depuis l'API
   useEffect(() => {
-    const savedProducts = localStorage.getItem('products');
-    if (savedProducts) {
-      setProductList(JSON.parse(savedProducts));
-    }
+    const fetchData = async () => {
+      try {
+        // Charger les produits
+        const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const productsData = await productsRes.json();
+        if (productsData.success) {
+          setProductList(productsData.data.products || productsData.data);
+        }
 
-    const savedSales = localStorage.getItem('sales');
-    if (savedSales) {
-      const parsedSales = JSON.parse(savedSales);
-      // Filtrer pour ne garder que les ventes completed
-      const completedSales = parsedSales.filter((sale: Sale) => sale.status === 'completed');
-      setSales(completedSales);
-      // Mettre à jour localStorage pour supprimer les ventes en pending
-      localStorage.setItem('sales', JSON.stringify(completedSales));
-    } else {
-      // Données initiales si aucune vente sauvegardée
-      setSales([
-        { id: "001", customer: "Jean Dupont", amount: "245 FCFA", status: "completed", date: "2026-04-17", items: [], total: 245 },
-        { id: "003", customer: "Pierre Bernard", amount: "412 FCFA", status: "completed", date: "2026-04-16", items: [], total: 412 },
-        { id: "004", customer: "Sophie Petit", amount: "98 FCFA", status: "completed", date: "2026-04-16", items: [], total: 98 },
-      ]);
-    }
-  }, []);
+        // Charger les ventes
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const salesData = await salesRes.json();
+        if (salesData.success) {
+          setSales(salesData.data.sales || salesData.data);
+        }
+
+        // Charger les statistiques
+        const statsRes = await fetch(`${API_BASE_URL}/api/sales/stats`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const statsData = await statsRes.json();
+        if (statsData.success) {
+          setStats(statsData.data);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+        toast({ title: "Erreur", description: "Impossible de charger les données", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [token]);
   const addItem = () => {
     setItems((prev) => [...prev, { productId: "", productName: "", quantity: 1, unitPrice: 0, total: 0 }]);
   };
 
   const updateItem = (index: number, productId: string) => {
-    const product = productList.find((p) => p.id === productId);
+    const product = productList.find((p) => p._id === productId);
     if (!product) return;
     setItems((prev) =>
       prev.map((item, i) =>
@@ -81,7 +113,7 @@ const Sales = () => {
     const item = items[index];
     if (!item.productId) return;
 
-    const product = productList.find((p) => p.id === item.productId);
+    const product = productList.find((p) => p._id === item.productId);
     if (!product) return;
 
     if (quantity > product.stock) {
@@ -98,78 +130,55 @@ const Sales = () => {
     );
   };
 
-  const handleCreateSale = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateSale = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!customer || items.length === 0) {
       toast({ title: "Erreur", description: "Veuillez remplir tous les champs", variant: "destructive" });
       return;
     }
 
-    // Vérifier le stock pour tous les articles
-    for (const item of items) {
-      const product = productList.find((p) => p.id === item.productId);
-      if (!product) continue;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sales`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ customer, items }),
+      });
 
-      if (item.quantity > product.stock) {
-        toast({
-          title: "Stock insuffisant",
-          description: `Le produit ${product.name} n'a pas assez de stock. Quantité demandée: ${item.quantity}, Stock disponible: ${product.stock} ${product.unit}`,
-          variant: "destructive"
+      const data = await response.json();
+
+      if (data.success) {
+        setSales((prev) => [data.data, ...prev]);
+        setItems([]);
+        setCustomer("");
+        setCreateOpen(false);
+        
+        toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
+
+        // Recharger les données
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        return;
+        const salesData = await salesRes.json();
+        if (salesData.success) {
+          setSales(salesData.data.sales || salesData.data);
+        }
+
+        const statsRes = await fetch(`${API_BASE_URL}/api/sales/stats`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const statsData = await statsRes.json();
+        if (statsData.success) {
+          setStats(statsData.data);
+        }
+      } else {
+        toast({ title: "Erreur", description: data.message || "Erreur lors de la création de la vente", variant: "destructive" });
       }
+    } catch (error) {
+      toast({ title: "Erreur", description: "Erreur de réseau", variant: "destructive" });
     }
-
-    // Mettre à jour le stock des produits
-    const updatedProducts = productList.map((product) => {
-      const soldItem = items.find((item) => item.productId === product.id);
-      if (soldItem) {
-        return { ...product, stock: product.stock - soldItem.quantity };
-      }
-      return product;
-    });
-
-    setProductList(updatedProducts);
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
-
-    const newSale: Sale = {
-      id: String(Date.now()),
-      customer,
-      date: new Date().toISOString().split("T")[0],
-      items,
-      total: items.reduce((s, i) => s + i.total, 0),
-      amount: formatCurrency(items.reduce((s, i) => s + i.total, 0)),
-      status: "completed",
-    };
-
-    setSales((prev) => [newSale, ...prev]);
-    setItems([]);
-    setCustomer("");
-    setCreateOpen(false);
-    
-    // Sauvegarder les ventes dans localStorage
-    localStorage.setItem('sales', JSON.stringify([newSale, ...sales]));
-    
-    toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
-
-    // Créer automatiquement la facture correspondante
-    createInvoiceFromSale(newSale);
-  };
-
-  const createInvoiceFromSale = (sale: Sale) => {
-    const invoiceData = {
-      id: sale.id,
-      number: `FAC-2026-${String(sales.length + 1).padStart(3, "0")}`,
-      client: sale.customer,
-      date: sale.date,
-      items: sale.items,
-      total: sale.total,
-      status: "pending" as const,
-    };
-
-    // Naviguer vers la page factures avec les données pré-remplies
-    navigate('/invoices', { state: { newInvoice: invoiceData } });
-    toast({ title: "Facture générée", description: `Facture ${invoiceData.number} créée automatiquement` });
   };
 
   const viewSaleDetails = (sale: Sale) => {
@@ -177,6 +186,14 @@ const Sales = () => {
       navigate('/invoices', { state: { invoiceId: sale.invoiceId } });
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -226,7 +243,7 @@ const Sales = () => {
                           </SelectTrigger>
                           <SelectContent>
                             {productList.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
+                              <SelectItem key={p._id} value={p._id}>
                                 {p.name} - {formatCurrency(p.price)}
                               </SelectItem>
                             ))}
@@ -269,9 +286,9 @@ const Sales = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2,450 FCFA</div>
+            <div className="text-2xl font-bold">{stats ? formatCurrency(stats.todayTotal) : '0 FCFA'}</div>
             <p className="text-xs text-muted-foreground">
-              +12% par rapport à hier
+              {stats ? `${stats.todayCount} ventes` : '0 ventes'}
             </p>
           </CardContent>
         </Card>
@@ -282,9 +299,9 @@ const Sales = () => {
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
+            <div className="text-2xl font-bold">{stats ? stats.totalSales : 0}</div>
             <p className="text-xs text-muted-foreground">
-              +8% par rapport à hier
+              {stats ? `${stats.pendingSales} en attente` : '0 en attente'}
             </p>
           </CardContent>
         </Card>
@@ -295,22 +312,22 @@ const Sales = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">102 FCFA</div>
+            <div className="text-2xl font-bold">{stats ? formatCurrency(stats.averageOrderValue) : '0 FCFA'}</div>
             <p className="text-xs text-muted-foreground">
-              +4% par rapport à hier
+              Moyenne du jour
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Objectif mensuel</CardTitle>
+            <CardTitle className="text-sm font-medium">Ventes du mois</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">68%</div>
+            <div className="text-2xl font-bold">{stats ? formatCurrency(stats.monthTotal) : '0 FCFA'}</div>
             <p className="text-xs text-muted-foreground">
-              34,200 FCFA / 50,000 FCFA
+              {stats ? `${stats.monthCount} ventes ce mois` : '0 ventes ce mois'}
             </p>
           </CardContent>
         </Card>
@@ -325,31 +342,35 @@ const Sales = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {sales.map((sale) => (
-              <div key={sale.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <p className="font-medium">Vente #{sale.id}</p>
-                  <p className="text-sm text-muted-foreground">{sale.customer}</p>
+            {sales.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Aucune vente enregistrée</p>
+            ) : (
+              sales.map((sale) => (
+                <div key={sale._id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <p className="font-medium">Vente #{sale._id.slice(-6)}</p>
+                    <p className="text-sm text-muted-foreground">{sale.customer}</p>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <span className="font-medium">{formatCurrency(sale.total)}</span>
+                    <Badge variant={sale.status === "completed" ? "default" : sale.status === "cancelled" ? "destructive" : "secondary"}>
+                      {sale.status}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">{new Date(sale.createdAt).toLocaleDateString('fr-FR')}</span>
+                    {sale.invoiceId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => viewSaleDetails(sale)}
+                        title="Voir la facture"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <span className="font-medium">{sale.amount}</span>
-                  <Badge variant={sale.status === "completed" ? "default" : "secondary"}>
-                    {sale.status}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">{sale.date}</span>
-                  {sale.invoiceId && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => viewSaleDetails(sale)}
-                      title="Voir la facture"
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>
