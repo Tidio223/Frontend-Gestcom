@@ -32,10 +32,6 @@ const Invoices = () => {
 
   // Charger les factures depuis localStorage au démarrage
   useEffect(() => {
-    // Nettoyer les anciennes factures au démarrage
-    localStorage.removeItem('invoices');
-    setInvoiceList([]);
-    
     const savedInvoices = localStorage.getItem('invoices');
     if (savedInvoices) {
       setInvoiceList(JSON.parse(savedInvoices));
@@ -46,12 +42,18 @@ const Invoices = () => {
   useEffect(() => {
     if (location.state?.newInvoice) {
       const newInvoice = location.state.newInvoice;
-      const updatedList = [newInvoice, ...invoiceList];
-      setInvoiceList(updatedList);
-      localStorage.setItem('invoices', JSON.stringify(updatedList));
-      setViewInvoice(newInvoice);
+      console.log('Nouvelle facture reçue:', newInvoice);
       
-      toast({ title: "Facture générée", description: `Facture ${newInvoice.number} créée pour ${newInvoice.client}` });
+      // Vérifier si la facture existe déjà pour éviter les doublons
+      const exists = invoiceList.some(inv => inv.id === newInvoice.id);
+      if (!exists) {
+        const updatedList = [newInvoice, ...invoiceList];
+        setInvoiceList(updatedList);
+        localStorage.setItem('invoices', JSON.stringify(updatedList));
+        setViewInvoice(newInvoice);
+        
+        toast({ title: "Facture générée", description: `Facture ${newInvoice.number} créée pour ${newInvoice.client}` });
+      }
       
       // Nettoyer l'état pour éviter les doublons
       window.history.replaceState({}, document.title);

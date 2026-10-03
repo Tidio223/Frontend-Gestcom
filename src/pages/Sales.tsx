@@ -202,7 +202,9 @@ const Sales = () => {
         toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
 
         // Générer la facture localement et naviguer vers la page des factures
-        const invoiceNumber = `FAC-${new Date().getFullYear()}-${String(sales.length + 1).padStart(3, '0')}`;
+        const savedInvoices = localStorage.getItem('invoices');
+        const existingInvoices = savedInvoices ? JSON.parse(savedInvoices) : [];
+        const invoiceNumber = `FAC-${new Date().getFullYear()}-${String(existingInvoices.length + 1).padStart(3, '0')}`;
         
         const newInvoice = {
           id: sale._id,
