@@ -32,6 +32,10 @@ const Invoices = () => {
 
   // Charger les factures depuis localStorage au démarrage
   useEffect(() => {
+    // Nettoyer les anciennes factures au démarrage
+    localStorage.removeItem('invoices');
+    setInvoiceList([]);
+    
     const savedInvoices = localStorage.getItem('invoices');
     if (savedInvoices) {
       setInvoiceList(JSON.parse(savedInvoices));
@@ -46,6 +50,9 @@ const Invoices = () => {
       setInvoiceList(updatedList);
       localStorage.setItem('invoices', JSON.stringify(updatedList));
       setViewInvoice(newInvoice);
+      
+      toast({ title: "Facture générée", description: `Facture ${newInvoice.number} créée pour ${newInvoice.client}` });
+      
       // Nettoyer l'état pour éviter les doublons
       window.history.replaceState({}, document.title);
     }

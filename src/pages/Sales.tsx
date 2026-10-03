@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -49,6 +50,7 @@ const Sales = () => {
   const [typeVente, setTypeVente] = useState<'gros' | 'detail'>('detail');
   const [productList, setProductList] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -167,10 +169,14 @@ const Sales = () => {
     );
   };
 
-  const handleCreateSale = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     if (!customer || items.length === 0) {
       toast({ title: "Erreur", description: "Veuillez remplir tous les champs", variant: "destructive" });
+      setIsSubmitting(false);
       return;
     }
 
@@ -187,34 +193,42 @@ const Sales = () => {
       const data = await response.json();
 
       if (data.success) {
-        setSales((prev) => [data.data, ...prev]);
+        const sale = data.data;
+        setSales((prev) => [sale, ...prev]);
         setItems([]);
         setCustomer("");
         setCreateOpen(false);
         
         toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
 
-        // Recharger les données
-        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const salesData = await salesRes.json();
-        if (salesData.success) {
-          setSales(salesData.data.sales || salesData.data);
-        }
+        // Générer la facture localement et naviguer vers la page des factures
+        const invoiceNumber = `FAC-${new Date().getFullYear()}-${String(sales.length + 1).padStart(3, '0')}`;
+        
+        const newInvoice = {
+          id: sale._id,
+          number: invoiceNumber,
+          client: sale.customer,
+          date: sale.createdAt,
+          items: sale.items.map((item: any) => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.total,
+          })),
+          total: sale.total,
+          status: 'pending',
+          typeVente: sale.typeVente,
+        };
 
-        const statsRes = await fetch(`${API_BASE_URL}/api/sales/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const statsData = await statsRes.json();
-        if (statsData.success) {
-          setStats(statsData.data);
-        }
+        navigate('/invoices', { state: { newInvoice } });
       } else {
         toast({ title: "Erreur", description: data.message || "Erreur lors de la création de la vente", variant: "destructive" });
       }
     } catch (error) {
       toast({ title: "Erreur", description: "Erreur de réseau", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -253,16 +267,16 @@ const Sales = () => {
               <DialogTitle>Nouvelle vente</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreateSale} className="space-y-4">
-              <div>
-                <Label htmlFor="customer">Client</Label>
-                <Input
-                  id="customer"
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
-                  placeholder="Nom du client"
-                  required
-                />
-              </div>
+            <div>
+              <Label htmlFor="customer">Client</Label>
+              <Input
+                id="customer"
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                placeholder="Nom du client"
+                required
+              />
+            </div>
               <div>
                 <Label>Type de vente</Label>
                 <div className="flex gap-2 mt-2">
@@ -293,42 +307,23 @@ const Sales = () => {
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {items.map((item, i) => (
-                    <div key={i} className="flex gap-2 items-end relative">
+                    <div key={i} className="flex gap-2 items-end">
                       <div className="flex-1">
-                        <div className="relative">
-                          <Input
-                            type="text"
-                            placeholder="Rechercher un produit..."
-                            value={item.productName}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setItems(prev => prev.map((it, idx) => idx === i ? { ...it, productName: value, showDropdown: true } : it));
-                            }}
-                            onFocus={() => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, showDropdown: true } : it))}
-                            className="w-full"
-                          />
-                          {item.showDropdown && (
-                            <div className="absolute z-[200] w-full mt-1 bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                              {productList
-                                .filter(p => p.name.toLowerCase().includes((item.productName || '').toLowerCase()))
-                                .map((p) => (
-                                  <div
-                                    key={p._id}
-                                    className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
-                                    onClick={() => {
-                                      updateItem(i, p._id);
-                                      setItems(prev => prev.map((it, idx) => idx === i ? { ...it, showDropdown: false } : it));
-                                    }}
-                                  >
-                                    {p.name} - {formatCurrency(typeVente === 'gros' ? (p.prixGros || p.price) : (p.prixDetail || p.price))}
-                                  </div>
-                                ))}
-                              {productList.filter(p => p.name.toLowerCase().includes((item.productName || '').toLowerCase())).length === 0 && (
-                                <div className="px-3 py-2 text-sm text-muted-foreground">Aucun produit trouvé</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <Select
+                          value={item.productId}
+                          onValueChange={(value) => updateItem(i, value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un produit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {productList.map((p) => (
+                              <SelectItem key={p._id} value={p._id}>
+                                {p.name} - {formatCurrency(typeVente === 'gros' ? (p.prixGros || p.price) : (p.prixDetail || p.price))}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="w-20">
                         <Input
@@ -336,22 +331,14 @@ const Sales = () => {
                           min={1}
                           value={item.quantity}
                           onChange={(e) => updateQuantity(i, Number(e.target.value))}
-                          placeholder="Qté"
                         />
                       </div>
                       <div className="w-28 text-right text-sm font-medium text-card-foreground py-2">
                         {formatCurrency(item.total)}
                       </div>
-                      {items.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setItems(items.filter((_, idx) => idx !== i))}>
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -361,8 +348,8 @@ const Sales = () => {
                   </div>
                 )}
               </div>
-              <Button type="submit" className="w-full" disabled={items.length === 0 || !customer}>
-                Créer la vente et générer la facture
+              <Button type="submit" className="w-full" disabled={items.length === 0 || !customer || isSubmitting}>
+                {isSubmitting ? 'Création en cours...' : 'Créer la vente et générer la facture'}
               </Button>
             </form>
           </DialogContent>

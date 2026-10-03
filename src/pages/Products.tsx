@@ -43,6 +43,9 @@ const Products = () => {
 
   // Charger les produits et les mouvements de stock depuis localStorage au démarrage
   useEffect(() => {
+    // Nettoyer les anciennes données mock au démarrage
+    localStorage.removeItem('products');
+    
     const fetchProducts = async () => {
       try {
         const token = localStorage.getItem('token');
@@ -65,7 +68,7 @@ const Products = () => {
             prixDetail: p.prixDetail || p.price || 0,
             stock: p.stock,
             minStock: p.minStock,
-            unit: 'unité', // Valeur par défaut si non fournie
+            unit: p.unit || 'unité', // Utiliser l'unité de l'API ou 'unité' par défaut
           }));
           setProductList(transformedProducts);
         } else {
