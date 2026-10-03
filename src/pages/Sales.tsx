@@ -192,7 +192,7 @@ const Sales = () => {
       const data = await response.json();
 
       if (data.success) {
-        const sale = data.data;
+        const sale = data.data.sale;
         setSales((prev) => [sale, ...prev]);
         setItems([]);
         setCustomer("");
@@ -210,9 +210,8 @@ const Sales = () => {
   };
 
   const viewSaleDetails = (sale: Sale) => {
-    if (sale.invoiceId) {
-      navigate('/invoices', { state: { invoiceId: sale.invoiceId } });
-    }
+    // Rediriger vers la page des factures pour voir la facture associée
+    navigate('/invoices');
   };
 
   if (loading) {
