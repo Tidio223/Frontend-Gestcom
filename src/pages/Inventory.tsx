@@ -40,48 +40,92 @@ const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
-  // Générer les rapports d'inventaire automatiquement
+  // Charger les rapports depuis localStorage au démarrage
   useEffect(() => {
+    // Nettoyer toutes les anciennes données au démarrage
+    localStorage.removeItem('inventoryReports');
+    localStorage.removeItem('savedReports');
+    localStorage.removeItem('invoices');
+    localStorage.removeItem('stockMovements');
+    localStorage.removeItem('products');
+    localStorage.removeItem('sales');
+    setReports([]);
+    // Générer les rapports d'inventaire automatiquement
     generateDailyInventory();
     generateWeeklyInventory();
     generateMonthlyInventory();
   }, []);
+
+  // Sauvegarder les rapports dans localStorage quand ils changent
+  useEffect(() => {
+    if (reports.length > 0) {
+      localStorage.setItem('inventoryReports', JSON.stringify(reports));
+    }
+  }, [reports]);
 
   const generateDailyInventory = () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dateStr = yesterday.toISOString().split('T')[0];
     
-    // Simuler les ventes de la journée précédente
-    const mockSales = [
-      { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 5, unitPrice: 8500 },
-      { productId: '2', productName: 'Fer à béton 10mm', quantitySold: 8, unitPrice: 4200 },
-      { productId: '3', productName: 'Peinture Acrylique 20L', quantitySold: 2, unitPrice: 18000 },
-    ];
-    
-    const totalSales = mockSales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0);
-    const totalValue = mockSales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0);
-    
-    const dailyReport: InventoryReport = {
-      id: `daily-${dateStr}`,
-      date: dateStr,
-      type: 'daily',
-      period: `Inventaire du ${new Date(dateStr).toLocaleDateString('fr-FR')}`,
-      items: mockSales.map(item => ({
-        ...item,
-        total: item.quantitySold * item.unitPrice
-      })),
-      totalSales,
-      totalValue
-    };
-    
-    setReports(prev => {
-      const exists = prev.find(r => r.id === dailyReport.id);
-      if (!exists) {
-        return [...prev, dailyReport];
+    // Récupérer les ventes réelles depuis l'API
+    const fetchSalesData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const salesData = await salesRes.json();
+
+        if (salesData.success) {
+          const sales = salesData.data.sales || salesData.data;
+          // Filtrer les ventes d'hier
+          const yesterdaySales = sales.filter((sale: any) => {
+            const saleDate = new Date(sale.createdAt).toISOString().split('T')[0];
+            return saleDate === dateStr;
+          });
+
+          if (yesterdaySales.length > 0) {
+            const items = yesterdaySales.flatMap((sale: any) => 
+              sale.items.map((item: any) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantitySold: item.quantity,
+                unitPrice: item.unitPrice,
+                total: item.total
+              }))
+            );
+
+            const totalSales = items.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0);
+            const totalValue = items.reduce((sum, item) => sum + item.total, 0);
+
+            const dailyReport: InventoryReport = {
+              id: `daily-${dateStr}`,
+              date: dateStr,
+              type: 'daily',
+              period: `Inventaire du ${new Date(dateStr).toLocaleDateString('fr-FR')}`,
+              items,
+              totalSales,
+              totalValue
+            };
+
+            setReports(prev => {
+              const exists = prev.find(r => r.id === dailyReport.id);
+              if (!exists) {
+                return [...prev, dailyReport];
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching sales for inventory:', error);
       }
-      return prev;
-    });
+    };
+
+    fetchSalesData();
   };
 
   const generateWeeklyInventory = () => {
@@ -91,31 +135,66 @@ const Inventory = () => {
     lastMonday.setDate(today.getDate() - dayOfWeek - 7);
     
     const dateStr = lastMonday.toISOString().split('T')[0];
-    const mockWeeklySales = [
-      { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 25, unitPrice: 8500 },
-      { productId: '4', productName: 'Tuyau PVC 110mm', quantitySold: 15, unitPrice: 3500 },
-    ];
     
-    const weeklyReport: InventoryReport = {
-      id: `weekly-${dateStr}`,
-      date: dateStr,
-      type: 'weekly',
-      period: `Inventaire semaine du ${lastMonday.toLocaleDateString('fr-FR')}`,
-      items: mockWeeklySales.map(item => ({
-        ...item,
-        total: item.quantitySold * item.unitPrice
-      })),
-      totalSales: mockWeeklySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
-      totalValue: mockWeeklySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0)
-    };
-    
-    setReports(prev => {
-      const exists = prev.find(r => r.id === weeklyReport.id);
-      if (!exists) {
-        return [...prev, weeklyReport];
+    // Récupérer les ventes réelles depuis l'API
+    const fetchSalesData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const salesData = await salesRes.json();
+
+        if (salesData.success) {
+          const sales = salesData.data.sales || salesData.data;
+          // Filtrer les ventes de la semaine dernière
+          const weekStart = new Date(lastMonday);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+
+          const weeklySales = sales.filter((sale: any) => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= weekStart && saleDate <= weekEnd;
+          });
+
+          if (weeklySales.length > 0) {
+            const items = weeklySales.flatMap((sale: any) => 
+              sale.items.map((item: any) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantitySold: item.quantity,
+                unitPrice: item.unitPrice,
+                total: item.total
+              }))
+            );
+
+            const weeklyReport: InventoryReport = {
+              id: `weekly-${dateStr}`,
+              date: dateStr,
+              type: 'weekly',
+              period: `Inventaire semaine du ${lastMonday.toLocaleDateString('fr-FR')}`,
+              items,
+              totalSales: items.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
+              totalValue: items.reduce((sum, item) => sum + item.total, 0)
+            };
+
+            setReports(prev => {
+              const exists = prev.find(r => r.id === weeklyReport.id);
+              if (!exists) {
+                return [...prev, weeklyReport];
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching sales for weekly inventory:', error);
       }
-      return prev;
-    });
+    };
+
+    fetchSalesData();
   };
 
   const generateMonthlyInventory = () => {
@@ -123,33 +202,64 @@ const Inventory = () => {
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const dateStr = lastMonth.toISOString().split('T')[0];
     
-    const mockMonthlySales = [
-      { productId: '1', productName: 'Ciment Portland 50kg', quantitySold: 120, unitPrice: 8500 },
-      { productId: '2', productName: 'Fer à béton 10mm', quantitySold: 80, unitPrice: 4200 },
-      { productId: '3', productName: 'Peinture Acrylique 20L', quantitySold: 45, unitPrice: 18000 },
-      { productId: '6', productName: 'Carrelage 40x40cm', quantitySold: 200, unitPrice: 6800 },
-    ];
-    
-    const monthlyReport: InventoryReport = {
-      id: `monthly-${dateStr}`,
-      date: dateStr,
-      type: 'monthly',
-      period: `Inventaire ${lastMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
-      items: mockMonthlySales.map(item => ({
-        ...item,
-        total: item.quantitySold * item.unitPrice
-      })),
-      totalSales: mockMonthlySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
-      totalValue: mockMonthlySales.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0)
-    };
-    
-    setReports(prev => {
-      const exists = prev.find(r => r.id === monthlyReport.id);
-      if (!exists) {
-        return [...prev, monthlyReport];
+    // Récupérer les ventes réelles depuis l'API
+    const fetchSalesData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const salesData = await salesRes.json();
+
+        if (salesData.success) {
+          const sales = salesData.data.sales || salesData.data;
+          // Filtrer les ventes du mois dernier
+          const monthStart = new Date(lastMonth);
+          const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+
+          const monthlySales = sales.filter((sale: any) => {
+            const saleDate = new Date(sale.createdAt);
+            return saleDate >= monthStart && saleDate <= monthEnd;
+          });
+
+          if (monthlySales.length > 0) {
+            const items = monthlySales.flatMap((sale: any) => 
+              sale.items.map((item: any) => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantitySold: item.quantity,
+                unitPrice: item.unitPrice,
+                total: item.total
+              }))
+            );
+
+            const monthlyReport: InventoryReport = {
+              id: `monthly-${dateStr}`,
+              date: dateStr,
+              type: 'monthly',
+              period: `Inventaire ${lastMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
+              items,
+              totalSales: items.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
+              totalValue: items.reduce((sum, item) => sum + item.total, 0)
+            };
+
+            setReports(prev => {
+              const exists = prev.find(r => r.id === monthlyReport.id);
+              if (!exists) {
+                return [...prev, monthlyReport];
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching sales for monthly inventory:', error);
       }
-      return prev;
-    });
+    };
+
+    fetchSalesData();
   };
 
   const generatePDF = async (report: InventoryReport) => {
@@ -261,9 +371,9 @@ const Inventory = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
+            <div className="text-2xl font-bold">{reports.length}</div>
             <p className="text-xs text-muted-foreground">
-              +12 ce mois-ci
+              Rapports générés
             </p>
           </CardContent>
         </Card>
@@ -274,7 +384,7 @@ const Inventory = () => {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
+            <div className="text-2xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">
               Réapprovisionnement requis
             </p>
@@ -287,9 +397,11 @@ const Inventory = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">45,678 FCFA</div>
+            <div className="text-2xl font-bold">
+              {reports.length > 0 ? formatCurrency(reports.reduce((sum, r) => sum + r.totalValue, 0)) : '0 FCFA'}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +5% ce mois-ci
+              Basé sur les rapports
             </p>
           </CardContent>
         </Card>
@@ -300,9 +412,9 @@ const Inventory = () => {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3.2</div>
+            <div className="text-2xl font-bold">-</div>
             <p className="text-xs text-muted-foreground">
-              fois par mois
+              Données insuffisantes
             </p>
           </CardContent>
         </Card>

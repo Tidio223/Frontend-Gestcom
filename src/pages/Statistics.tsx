@@ -67,53 +67,84 @@ const Statistics = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+
   useEffect(() => {
-    generateStatistics();
+    fetchStatistics();
   }, [selectedPeriod]);
 
-  const generateStatistics = () => {
+  const fetchStatistics = async () => {
     setLoading(true);
-    
-    // Simuler les données statistiques
-    const mockSalesData: SalesData = {
-      period: selectedPeriod === 'day' ? 'Aujourd\'hui' : 
-              selectedPeriod === 'week' ? 'Cette semaine' : 
-              selectedPeriod === 'month' ? 'Ce mois' : 'Cette année',
-      totalSales: Math.floor(Math.random() * 100) + 50,
-      totalRevenue: Math.floor(Math.random() * 5000000) + 1000000,
-      totalOrders: Math.floor(Math.random() * 200) + 80,
-      averageOrderValue: Math.floor(Math.random() * 50000) + 10000,
-      growthRate: Math.floor(Math.random() * 40) - 10
-    };
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
-    const mockTopProducts: TopProduct[] = [
-      { id: '1', name: 'Ciment Portland 50kg', quantitySold: 120, revenue: 1020000, percentage: 25 },
-      { id: '2', name: 'Fer à béton 10mm', quantitySold: 80, revenue: 336000, percentage: 18 },
-      { id: '3', name: 'Peinture Acrylique 20L', quantitySold: 45, revenue: 810000, percentage: 15 },
-      { id: '4', name: 'Carrelage 40x40cm', quantitySold: 200, revenue: 1360000, percentage: 22 },
-      { id: '5', name: 'Tuyau PVC 110mm', quantitySold: 60, revenue: 210000, percentage: 12 },
-      { id: '6', name: 'Brique rouge standard', quantitySold: 150, revenue: 450000, percentage: 8 }
-    ];
+      // Récupérer les statistiques depuis l'API
+      const statsRes = await fetch(`${API_BASE_URL}/api/sales/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const statsData = await statsRes.json();
 
-    const mockMonthlyData: MonthlyData[] = [
-      { month: 'Jan', revenue: 1200000, orders: 45 },
-      { month: 'Fev', revenue: 1500000, orders: 52 },
-      { month: 'Mar', revenue: 1800000, orders: 61 },
-      { month: 'Avr', revenue: 2100000, orders: 68 },
-      { month: 'Mai', revenue: 1900000, orders: 59 },
-      { month: 'Jun', revenue: 2300000, orders: 72 },
-      { month: 'Jul', revenue: 2500000, orders: 78 },
-      { month: 'Aou', revenue: 2200000, orders: 71 },
-      { month: 'Sep', revenue: 2800000, orders: 85 },
-      { month: 'Oct', revenue: 3200000, orders: 92 },
-      { month: 'Nov', revenue: 3500000, orders: 98 },
-      { month: 'Dec', revenue: 4000000, orders: 110 }
-    ];
+      if (statsData.success) {
+        const stats = statsData.data;
+        setSalesData({
+          period: selectedPeriod === 'day' ? 'Aujourd\'hui' : 
+                  selectedPeriod === 'week' ? 'Cette semaine' : 
+                  selectedPeriod === 'month' ? 'Ce mois' : 'Cette année',
+          totalSales: stats.totalSales || 0,
+          totalRevenue: stats.todayTotal || 0,
+          totalOrders: stats.totalSales || 0,
+          averageOrderValue: stats.averageOrderValue || 0,
+          growthRate: 0
+        });
+      }
 
-    setSalesData(mockSalesData);
-    setTopProducts(mockTopProducts);
-    setMonthlyData(mockMonthlyData);
-    setLoading(false);
+      // Récupérer les ventes pour les produits les plus vendus
+      const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const salesResData = await salesRes.json();
+
+      if (salesResData.success) {
+        const sales = salesResData.data.sales || salesResData.data;
+        // Calculer les produits les plus vendus
+        const productSales: { [key: string]: { name: string; quantity: number; revenue: number } } = {};
+        sales.forEach((sale: any) => {
+          sale.items.forEach((item: any) => {
+            if (!productSales[item.productName]) {
+              productSales[item.productName] = { name: item.productName, quantity: 0, revenue: 0 };
+            }
+            productSales[item.productName].quantity += item.quantity;
+            productSales[item.productName].revenue += item.total;
+          });
+        });
+
+        const topProductsData = Object.values(productSales)
+          .map((p, index) => ({
+            id: index.toString(),
+            name: p.name,
+            quantitySold: p.quantity,
+            revenue: p.revenue,
+            percentage: 0
+          }))
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 6);
+
+        const totalRevenue = topProductsData.reduce((sum, p) => sum + p.revenue, 0);
+        topProductsData.forEach(p => {
+          p.percentage = totalRevenue > 0 ? Math.round((p.revenue / totalRevenue) * 100) : 0;
+        });
+
+        setTopProducts(topProductsData);
+      }
+    } catch (error) {
+      console.error('Error fetching statistics:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const StatCard = ({ 
@@ -185,7 +216,7 @@ const Statistics = () => {
               <SelectItem value="year">Cette année</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={generateStatistics}>
+          <Button variant="outline" onClick={fetchStatistics}>
             <Calendar className="mr-2 h-4 w-4" />
             Actualiser
           </Button>
@@ -291,31 +322,35 @@ const Statistics = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={monthlyData.slice(-6)}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                <Tooltip 
-                  formatter={(value, name) => [
-                    name === 'revenue' ? formatCurrency(Number(value)) : value,
-                    name === 'revenue' ? 'CA' : 'Commandes'
-                  ]}
-                />
-                <Legend />
-                <Area
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#8884d8"
-                  fill="#8884d8"
-                  fillOpacity={0.3}
-                  name="revenue"
-                />
-                <Bar yAxisId="right" dataKey="orders" fill="#82ca9d" name="orders" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {monthlyData.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Aucune donnée mensuelle disponible</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={monthlyData.slice(-6)}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                  <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+                  <Tooltip 
+                    formatter={(value, name) => [
+                      name === 'revenue' ? formatCurrency(Number(value)) : value,
+                      name === 'revenue' ? 'CA' : 'Commandes'
+                    ]}
+                  />
+                  <Legend />
+                  <Area
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#8884d8"
+                    fill="#8884d8"
+                    fillOpacity={0.3}
+                    name="revenue"
+                  />
+                  <Bar yAxisId="right" dataKey="orders" fill="#82ca9d" name="orders" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -332,39 +367,43 @@ const Statistics = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-              <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-              <Tooltip 
-                formatter={(value, name) => [
-                  name === 'revenue' ? formatCurrency(Number(value)) : value,
-                  name === 'revenue' ? 'Chiffre d\'affaires' : 'Commandes'
-                ]}
-              />
-              <Legend />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="revenue"
-                stroke="#8884d8"
-                strokeWidth={2}
-                dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
-                name="revenue"
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="orders"
-                stroke="#82ca9d"
-                strokeWidth={2}
-                dot={{ fill: '#82ca9d', strokeWidth: 2, r: 4 }}
-                name="orders"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {monthlyData.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart data={monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
+                <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+                <Tooltip 
+                  formatter={(value, name) => [
+                    name === 'revenue' ? formatCurrency(Number(value)) : value,
+                    name === 'revenue' ? 'Chiffre d\'affaires' : 'Commandes'
+                  ]}
+                />
+                <Legend />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#8884d8"
+                  strokeWidth={2}
+                  dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
+                  name="revenue"
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="orders"
+                  stroke="#82ca9d"
+                  strokeWidth={2}
+                  dot={{ fill: '#82ca9d', strokeWidth: 2, r: 4 }}
+                  name="orders"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 
@@ -384,26 +423,26 @@ const Statistics = () => {
             <div className="p-4 border rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Meilleur mois</span>
-                <Badge variant="outline">Décembre</Badge>
+                <Badge variant="outline">{monthlyData.length > 0 ? monthlyData.reduce((max, m) => m.revenue > max.revenue ? m : max, monthlyData[0]).month : 'N/A'}</Badge>
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(4000000)}</p>
-              <p className="text-xs text-muted-foreground">110 commandes</p>
-            </div>
-            <div className="p-4 border rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">Taux de croissance</span>
-                <Badge variant="outline" className="text-green-600">+233%</Badge>
-              </div>
-              <p className="text-2xl font-bold">233%</p>
-              <p className="text-xs text-muted-foreground">vs Janvier</p>
+              <p className="text-2xl font-bold">{monthlyData.length > 0 ? formatCurrency(Math.max(...monthlyData.map(m => m.revenue))) : '0 FCFA'}</p>
+              <p className="text-xs text-muted-foreground">{monthlyData.length > 0 ? `${Math.max(...monthlyData.map(m => m.orders))} commandes` : '0 commandes'}</p>
             </div>
             <div className="p-4 border rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Total annuel</span>
                 <Badge variant="outline">2026</Badge>
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(29000000)}</p>
-              <p className="text-xs text-muted-foreground">941 commandes</p>
+              <p className="text-2xl font-bold">{monthlyData.length > 0 ? formatCurrency(monthlyData.reduce((sum, m) => sum + m.revenue, 0)) : '0 FCFA'}</p>
+              <p className="text-xs text-muted-foreground">{monthlyData.length > 0 ? `${monthlyData.reduce((sum, m) => sum + m.orders, 0)} commandes` : '0 commandes'}</p>
+            </div>
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Moyenne mensuelle</span>
+                <Badge variant="outline">Moyenne</Badge>
+              </div>
+              <p className="text-2xl font-bold">{monthlyData.length > 0 ? formatCurrency(Math.round(monthlyData.reduce((sum, m) => sum + m.revenue, 0) / monthlyData.length)) : '0 FCFA'}</p>
+              <p className="text-xs text-muted-foreground">{monthlyData.length > 0 ? `${Math.round(monthlyData.reduce((sum, m) => sum + m.orders, 0) / monthlyData.length)} commandes/mois` : '0 commandes/mois'}</p>
             </div>
           </div>
         </CardContent>

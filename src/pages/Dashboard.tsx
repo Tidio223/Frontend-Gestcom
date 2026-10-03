@@ -1,12 +1,81 @@
+import { useState, useEffect } from "react";
 import { DollarSign, Package, FileText, AlertTriangle, TrendingUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import KpiCard from "@/components/KpiCard";
-import { products, invoices, salesData, formatCurrency } from "@/data/mock-data";
+import { formatCurrency } from "@/data/mock-data";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
 const Dashboard = () => {
-  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.total, 0);
+  const [products, setProducts] = useState<any[]>([]);
+  const [sales, setSales] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      // Récupérer les produits
+      const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const productsData = await productsRes.json();
+      if (productsData.success) {
+        const productsArray = productsData.data.products || productsData.data;
+        setProducts(productsArray.map((p: any) => ({
+          id: p._id,
+          name: p.name,
+          category: p.category,
+          stock: p.stock,
+          minStock: p.minStock
+        })));
+      }
+
+      // Récupérer les ventes
+      const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const salesData = await salesRes.json();
+      if (salesData.success) {
+        const salesArray = salesData.data.sales || salesData.data;
+        setSales(salesArray);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
   const lowStockProducts = products.filter((p) => p.stock <= p.minStock);
-  const pendingInvoices = invoices.filter((i) => i.status === "pending" || i.status === "overdue");
+  const pendingSales = sales.filter((s) => s.status === "pending");
+
+  // Générer les données de ventes pour les 7 derniers jours
+  const salesData = sales.slice(-7).map((sale, index) => ({
+    month: new Date(sale.createdAt).toLocaleDateString('fr-FR', { weekday: 'short' }),
+    revenue: sale.total,
+    profit: sale.total * 0.29
+  }));
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="font-display text-3xl font-bold text-foreground">Tableau de bord</h1>
+          <p className="mt-1 text-muted-foreground">Chargement des données...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -19,7 +88,7 @@ const Dashboard = () => {
         <KpiCard
           title="Chiffre d'affaires (Sem.)"
           value={formatCurrency(totalRevenue)}
-          change="+17% vs semaine dernière"
+          change={sales.length > 0 ? `${sales.length} ventes` : "Aucune vente"}
           changeType="positive"
           icon={DollarSign}
           iconColor="bg-primary/10"
@@ -41,9 +110,9 @@ const Dashboard = () => {
           iconColor="bg-warning/10"
         />
         <KpiCard
-          title="Factures (Semaine)"
-          value={String(invoices.length)}
-          change={`${pendingInvoices.length} en attente`}
+          title="Ventes (Semaine)"
+          value={String(sales.length)}
+          change={`${pendingSales.length} en attente`}
           changeType="negative"
           icon={FileText}
           iconColor="bg-primary/10"

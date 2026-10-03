@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText, Loader2 } from "lucide-react";
+import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -18,6 +17,7 @@ interface SaleItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  showDropdown?: boolean;
 }
 
 interface Sale {
@@ -59,13 +59,23 @@ const Sales = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.error('Token manquant');
+          setLoading(false);
+          return;
+        }
+
         // Charger les produits
         const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const productsData = await productsRes.json();
+        console.log('Produits chargés:', productsData);
         if (productsData.success) {
           setProductList(productsData.data.products || productsData.data);
+        } else {
+          console.error('Erreur produits:', productsData.message);
         }
 
         // Charger les ventes
@@ -94,7 +104,7 @@ const Sales = () => {
     };
 
     fetchData();
-  }, [token]);
+  }, []);
   const addItem = () => {
     setItems((prev) => [...prev, { productId: "", productName: "", quantity: 1, unitPrice: 0, total: 0 }]);
   };
@@ -235,20 +245,42 @@ const Sales = () => {
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {items.map((item, i) => (
-                    <div key={i} className="flex gap-2 items-end">
+                    <div key={i} className="flex gap-2 items-end relative">
                       <div className="flex-1">
-                        <Select onValueChange={(v) => updateItem(i, v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Produit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {productList.map((p) => (
-                              <SelectItem key={p._id} value={p._id}>
-                                {p.name} - {formatCurrency(p.price)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative">
+                          <Input
+                            type="text"
+                            placeholder="Rechercher un produit..."
+                            value={item.productName}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setItems(prev => prev.map((it, idx) => idx === i ? { ...it, productName: value, showDropdown: true } : it));
+                            }}
+                            onFocus={() => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, showDropdown: true } : it))}
+                            className="w-full"
+                          />
+                          {item.showDropdown && (
+                            <div className="absolute z-[200] w-full mt-1 bg-background border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                              {productList
+                                .filter(p => p.name.toLowerCase().includes((item.productName || '').toLowerCase()))
+                                .map((p) => (
+                                  <div
+                                    key={p._id}
+                                    className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                                    onClick={() => {
+                                      updateItem(i, p._id);
+                                      setItems(prev => prev.map((it, idx) => idx === i ? { ...it, showDropdown: false } : it));
+                                    }}
+                                  >
+                                    {p.name} - {formatCurrency(p.price)}
+                                  </div>
+                                ))}
+                              {productList.filter(p => p.name.toLowerCase().includes((item.productName || '').toLowerCase())).length === 0 && (
+                                <div className="px-3 py-2 text-sm text-muted-foreground">Aucun produit trouvé</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="w-20">
                         <Input
@@ -262,6 +294,16 @@ const Sales = () => {
                       <div className="w-28 text-right text-sm font-medium text-card-foreground py-2">
                         {formatCurrency(item.total)}
                       </div>
+                      {items.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>

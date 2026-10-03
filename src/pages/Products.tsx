@@ -53,8 +53,10 @@ const Products = () => {
         });
         if (response.ok) {
           const data = await response.json();
+          console.log('Produits API:', data);
           // Transformer les données de l'API pour correspondre à l'interface Product
-          const transformedProducts = data.data.map((p: any) => ({
+          const productsArray = data.data.products || data.data;
+          const transformedProducts = productsArray.map((p: any) => ({
             id: p._id,
             name: p.name,
             category: p.category,
@@ -282,69 +284,128 @@ const Products = () => {
           <h1 className="font-display text-3xl font-bold text-foreground">Produits & Stock</h1>
           <p className="mt-1 text-muted-foreground">Gérez votre inventaire et suivez les niveaux de stock</p>
         </div>
-        <Dialog open={stockManagementOpen} onOpenChange={setStockManagementOpen}>
-          <DialogTrigger asChild>
-            <Button><Package className="mr-2 h-4 w-4" />Gérer le stock</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>Gérer le stock</DialogTitle></DialogHeader>
-            <form onSubmit={handleStockMovement} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Produit</Label>
-                <Select value={stockManagementProductId} onValueChange={setStockManagementProductId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un produit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {productList.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name} (Stock: {p.stock} {p.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Type de mouvement</Label>
-                <Select value={stockManagementType} onValueChange={(value: 'entry' | 'exit') => setStockManagementType(value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entry">Entrée de stock</SelectItem>
-                    <SelectItem value="exit">Sortie de stock</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Quantité</Label>
-                <Input 
-                  type="number" 
-                  min="1" 
-                  value={stockManagementQuantity} 
-                  onChange={(e) => setStockManagementQuantity(Number(e.target.value))}
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Raison (optionnel)</Label>
-                <Input 
-                  value={stockManagementReason} 
-                  onChange={(e) => setStockManagementReason(e.target.value)}
-                  placeholder="Ex: Réception fournisseur, Vente, etc."
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setStockManagementOpen(false)} className="flex-1">
-                  Annuler
-                </Button>
-                <Button type="submit" className="flex-1">
-                  Enregistrer
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="mr-2 h-4 w-4" />Ajouter un produit</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader><DialogTitle>Ajouter un produit</DialogTitle></DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nom</Label>
+                  <Input name="name" placeholder="Nom du produit" required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Catégorie</Label>
+                  <Select name="category" defaultValue="alimentation">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="alimentation">Alimentation</SelectItem>
+                      <SelectItem value="électronique">Électronique</SelectItem>
+                      <SelectItem value="vêtements">Vêtements</SelectItem>
+                      <SelectItem value="maison">Maison</SelectItem>
+                      <SelectItem value="autres">Autres</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Prix unitaire</Label>
+                    <Input name="price" type="number" min="0" placeholder="0" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unité</Label>
+                    <Input name="unit" placeholder="unité, kg, litre..." defaultValue="unité" required />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Stock initial</Label>
+                    <Input name="stock" type="number" min="0" placeholder="0" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Stock minimum</Label>
+                    <Input name="minStock" type="number" min="0" placeholder="10" defaultValue="10" required />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)} className="flex-1">
+                    Annuler
+                  </Button>
+                  <Button type="submit" className="flex-1">
+                    Ajouter
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={stockManagementOpen} onOpenChange={setStockManagementOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline"><Package className="mr-2 h-4 w-4" />Gérer le stock</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader><DialogTitle>Gérer le stock</DialogTitle></DialogHeader>
+              <form onSubmit={handleStockMovement} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Produit</Label>
+                  <Select value={stockManagementProductId} onValueChange={setStockManagementProductId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un produit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {productList.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} (Stock: {p.stock} {p.unit})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Type de mouvement</Label>
+                  <Select value={stockManagementType} onValueChange={(value: 'entry' | 'exit') => setStockManagementType(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="entry">Entrée de stock</SelectItem>
+                      <SelectItem value="exit">Sortie de stock</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quantité</Label>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    value={stockManagementQuantity} 
+                    onChange={(e) => setStockManagementQuantity(Number(e.target.value))}
+                    required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Raison (optionnel)</Label>
+                  <Input 
+                    value={stockManagementReason} 
+                    onChange={(e) => setStockManagementReason(e.target.value)}
+                    placeholder="Ex: Réception fournisseur, Vente, etc."
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStockManagementOpen(false)} className="flex-1">
+                    Annuler
+                  </Button>
+                  <Button type="submit" className="flex-1">
+                    Enregistrer
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="relative max-w-sm">

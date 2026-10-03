@@ -16,6 +16,21 @@ const Reports = () => {
   const [dateRange, setDateRange] = useState<string>("month");
   const [viewingReport, setViewingReport] = useState<any>(null);
   const [currentReportType, setCurrentReportType] = useState<string>("");
+  const [savedReports, setSavedReports] = useState<any[]>([]);
+
+  // Charger les rapports sauvegardés depuis localStorage au démarrage
+  useEffect(() => {
+    // Nettoyer les anciens rapports au démarrage
+    localStorage.removeItem('savedReports');
+    setSavedReports([]);
+  }, []);
+
+  // Sauvegarder les rapports dans localStorage quand ils changent
+  useEffect(() => {
+    if (savedReports.length > 0) {
+      localStorage.setItem('savedReports', JSON.stringify(savedReports));
+    }
+  }, [savedReports]);
 
   // Régénérer le rapport quand la période ou le type change
   useEffect(() => {
@@ -146,10 +161,30 @@ const Reports = () => {
     const reportData = generateReportData(reportType, dateRange);
     setViewingReport(reportData);
     setCurrentReportType(reportType);
+    // Sauvegarder le rapport généré
+    const newReport = {
+      id: `${reportType}-${Date.now()}`,
+      type: reportType,
+      date: new Date().toISOString().split('T')[0],
+      period: dateRange,
+      title: reportData.title,
+      data: reportData
+    };
+    setSavedReports(prev => {
+      const exists = prev.find(r => r.id === newReport.id);
+      if (!exists) {
+        return [...prev, newReport];
+      }
+      return prev;
+    });
     // Scroll vers le bas de la page pour voir le rapport
     setTimeout(() => {
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }, 100);
+  };
+
+  const handleDeleteReport = (reportId: string) => {
+    setSavedReports(prev => prev.filter(r => r.id !== reportId));
   };
 
   const handleDownloadReport = (reportType: string, format: string) => {
@@ -342,9 +377,11 @@ const Reports = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">125,450 FCFA</div>
+            <div className="text-2xl font-bold">
+              {savedReports[0]?.data?.summary?.totalSales || "0 FCFA"}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +15% ce mois-ci
+              {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
             </p>
           </CardContent>
         </Card>
@@ -355,9 +392,11 @@ const Reports = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">42</div>
+            <div className="text-2xl font-bold">
+              {savedReports[0]?.data?.summary?.totalCustomers || 0}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +20% ce mois-ci
+              {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
             </p>
           </CardContent>
         </Card>
@@ -368,22 +407,24 @@ const Reports = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">324</div>
+            <div className="text-2xl font-bold">
+              {savedReports[0]?.data?.summary?.totalProducts || 0}
+            </div>
             <p className="text-xs text-muted-foreground">
-              +8% ce mois-ci
+              {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taux de croissance</CardTitle>
+            <CardTitle className="text-sm font-medium">Rapports générés</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12.5%</div>
+            <div className="text-2xl font-bold">{savedReports.length}</div>
             <p className="text-xs text-muted-foreground">
-              Annuel
+              Total des rapports
             </p>
           </CardContent>
         </Card>
@@ -399,48 +440,43 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { name: "Rapport de ventes mensuel", type: "sales", date: "2026-04-01", status: "Disponible", icon: DollarSign },
-                { name: "Analyse des produits", type: "inventory", date: "2026-04-15", status: "Disponible", icon: Package },
-                { name: "Rapport client", type: "customers", date: "2026-04-10", status: "Disponible", icon: Users },
-                { name: "Inventaire complet", type: "inventory", date: "2026-04-17", status: "Disponible", icon: Package },
-                { name: "Performance trimestrielle", type: "sales", date: "2026-03-31", status: "Disponible", icon: TrendingUp },
-              ].map((report, index) => (
-                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <report.icon className="h-4 w-4 text-muted-foreground" />
-                      <p className="font-medium">{report.name}</p>
+              {savedReports.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Aucun rapport sauvegardé</p>
+              ) : (
+                savedReports.map((report) => (
+                  <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <p className="font-medium">{report.title}</p>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{report.type} • {report.date}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">{report.type} • {report.date}</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={report.status === "Disponible" ? "default" : "secondary"}>
-                      {report.status}
-                    </Badge>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleViewReport(report.type)}
-                      disabled={report.status !== "Disponible"}
-                    >
-                      <Eye className="mr-2 h-3 w-3" />
-                      Voir
-                    </Button>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="default">Disponible</Badge>
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => handleDownloadReport(report.type, "csv")}
-                        disabled={report.status !== "Disponible"}
+                        onClick={() => {
+                          setViewingReport(report.data);
+                          setCurrentReportType(report.type);
+                        }}
+                      >
+                        <Eye className="mr-2 h-3 w-3" />
+                        Voir
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleDeleteReport(report.id)}
                       >
                         <Download className="mr-1 h-3 w-3" />
-                        CSV
+                        Supprimer
                       </Button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -454,26 +490,27 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { period: "Aujourd'hui", sales: "2,450 FCFA", orders: 24, growth: "+12%" },
-                { period: "Cette semaine", sales: "18,200 FCFA", orders: 156, growth: "+8%" },
-                { period: "Ce mois", sales: "125,450 FCFA", orders: 324, growth: "+15%" },
-                { period: "Ce trimestre", sales: "342,100 FCFA", orders: 892, growth: "+18%" },
-              ].map((period, index) => (
-                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <p className="font-medium">{period.period}</p>
-                    <p className="text-sm text-muted-foreground">{period.orders} commandes</p>
+              {savedReports.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
+              ) : (
+                savedReports.slice(0, 4).map((report, index) => (
+                  <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <p className="font-medium">{report.title}</p>
+                      <p className="text-sm text-muted-foreground">{report.date}</p>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium">
+                        {report.data.summary?.totalSales || "0 FCFA"}
+                      </span>
+                      <Badge variant="default" className="text-green-600">
+                        <TrendingUp className="mr-1 h-3 w-3" />
+                        Disponible
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <span className="font-medium">{period.sales}</span>
-                    <Badge variant="default" className="text-green-600">
-                      <TrendingUp className="mr-1 h-3 w-3" />
-                      {period.growth}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -488,32 +525,30 @@ const Reports = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {[
-              { rank: 1, name: "Ordinateur portable HP", sales: 45, revenue: "40,455 FCFA", growth: "+22%" },
-              { rank: 2, name: "Souris sans fil Logitech", sales: 89, revenue: "2,581 FCFA", growth: "+15%" },
-              { rank: 3, name: "Clavier mécanique", sales: 34, revenue: "3,026 FCFA", growth: "+8%" },
-              { rank: 4, name: "Moniteur 27 pouces", sales: 28, revenue: "9,772 FCFA", growth: "+12%" },
-              { rank: 5, name: "Webcam HD", sales: 67, revenue: "2,680 FCFA", growth: "+5%" },
-            ].map((product) => (
-              <div key={product.rank} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-medium text-sm">
-                    {product.rank}
+            {savedReports.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
+            ) : (
+              savedReports[0]?.data?.data?.slice(0, 5).map((item: any, index: number) => (
+                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-medium text-sm">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium">{item.product || item.name || 'Produit'}</p>
+                      <p className="text-sm text-muted-foreground">{item.quantity || item.orders || 0} unités vendues</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.sales} unités vendues</p>
+                  <div className="flex items-center space-x-4">
+                    <span className="font-medium">{item.amount || item.totalSpent || '0 FCFA'}</span>
+                    <Badge variant="default" className="text-green-600">
+                      <TrendingUp className="mr-1 h-3 w-3" />
+                      Disponible
+                    </Badge>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <span className="font-medium">{product.revenue}</span>
-                  <Badge variant="default" className="text-green-600">
-                    <TrendingUp className="mr-1 h-3 w-3" />
-                    {product.growth}
-                  </Badge>
-                </div>
-              </div>
-            ))}
+              )) || <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
+            )}
           </div>
         </CardContent>
       </Card>
