@@ -26,8 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+import { API_BASE_URL } from "@/config/api";
 
 // Schéma de validation
 const transactionSchema = z.object({

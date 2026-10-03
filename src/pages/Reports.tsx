@@ -8,8 +8,7 @@ import { Calendar, Eye, FileText } from "lucide-react";
 import { Download, TrendingUp, DollarSign, Users, Package } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+import { API_BASE_URL } from "@/config/api";
 
 const Reports = () => {
   const [selectedReport, setSelectedReport] = useState<string>("");

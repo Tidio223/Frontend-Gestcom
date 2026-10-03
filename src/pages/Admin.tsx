@@ -27,8 +27,7 @@ import {
 } from "@/components/ui/pagination";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+import { API_BASE_URL } from "@/config/api";
 
 // Emails des comptes protégés (doivent correspondre aux variables d'environnement backend)
 const PROTECTED_EMAILS = [

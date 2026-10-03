@@ -12,8 +12,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
+import { API_BASE_URL } from "@/config/api";
 
 const statusConfig = {
   pending: { label: "En attente", className: "bg-yellow-100 text-yellow-800 border-yellow-200" },
@@ -38,10 +37,13 @@ const Invoices = () => {
   useEffect(() => {
     const fetchInvoices = async () => {
       try {
+        console.log('Chargement des factures depuis:', API_BASE_URL);
         const response = await fetch(`${API_BASE_URL}/api/invoices`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();
+        console.log('Réponse factures:', data);
+        
         if (data.success) {
           // Transformer les données de l'API pour correspondre à l'interface
           const transformedInvoices = data.data.map((inv: any) => ({
@@ -61,9 +63,13 @@ const Invoices = () => {
             typeVente: inv.typeVente,
           }));
           setInvoiceList(transformedInvoices);
+        } else {
+          console.error('Erreur API factures:', data.message);
+          toast({ title: "Erreur", description: data.message || "Erreur lors du chargement des factures", variant: "destructive" });
         }
       } catch (error) {
         console.error('Erreur lors du chargement des factures:', error);
+        toast({ title: "Erreur", description: "Erreur de connexion au serveur", variant: "destructive" });
       } finally {
         setLoading(false);
       }
