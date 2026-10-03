@@ -7,11 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { invoices as initialInvoices, products, Invoice, InvoiceItem, formatCurrency } from "@/data/mock-data";
+import { products, Invoice, InvoiceItem, formatCurrency } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001";
 
 const statusConfig = {
   pending: { label: "En attente", className: "bg-yellow-100 text-yellow-800 border-yellow-200" },
@@ -20,51 +22,69 @@ const statusConfig = {
 };
 
 const Invoices = () => {
-  const [invoiceList, setInvoiceList] = useState<Invoice[]>(initialInvoices);
+  const [invoiceList, setInvoiceList] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [filterTypeVente, setFilterTypeVente] = useState<'all' | 'gros' | 'detail'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const location = useLocation();
+  const token = localStorage.getItem("token");
 
-  // Charger les factures depuis localStorage au démarrage
+  // Charger les factures depuis l'API
   useEffect(() => {
-    const savedInvoices = localStorage.getItem('invoices');
-    if (savedInvoices) {
-      setInvoiceList(JSON.parse(savedInvoices));
-    }
-  }, []);
-
-  // Gérer les nouvelles factures depuis les ventes
-  useEffect(() => {
-    if (location.state?.newInvoice) {
-      const newInvoice = location.state.newInvoice;
-      console.log('Nouvelle facture reçue:', newInvoice);
-      
-      // Vérifier si la facture existe déjà pour éviter les doublons
-      const exists = invoiceList.some(inv => inv.id === newInvoice.id);
-      if (!exists) {
-        const updatedList = [newInvoice, ...invoiceList];
-        setInvoiceList(updatedList);
-        localStorage.setItem('invoices', JSON.stringify(updatedList));
-        setViewInvoice(newInvoice);
-        
-        toast({ title: "Facture générée", description: `Facture ${newInvoice.number} créée pour ${newInvoice.client}` });
+    const fetchInvoices = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/invoices`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (data.success) {
+          // Transformer les données de l'API pour correspondre à l'interface
+          const transformedInvoices = data.data.map((inv: any) => ({
+            id: inv._id,
+            number: inv.number,
+            client: inv.client,
+            date: inv.date,
+            items: inv.items.map((item: any) => ({
+              productId: item.productId,
+              productName: item.productName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              total: item.total,
+            })),
+            total: inv.total,
+            status: inv.status,
+            typeVente: inv.typeVente,
+          }));
+          setInvoiceList(transformedInvoices);
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des factures:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      // Nettoyer l'état pour éviter les doublons
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state]);
+    };
+
+    fetchInvoices();
+  }, []);
 
   const filtered = invoiceList.filter(inv => 
     (filterTypeVente === 'all' || inv.typeVente === filterTypeVente) &&
     (inv.number.toLowerCase().includes(search.toLowerCase()) ||
     inv.client.toLowerCase().includes(search.toLowerCase()))
   );
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Chargement des factures...</div>
+      </div>
+    );
+  }
 
   const addItem = () => {
     setItems([...items, { productId: "", productName: "", quantity: 1, unitPrice: 0, total: 0 }]);

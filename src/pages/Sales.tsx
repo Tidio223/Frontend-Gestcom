@@ -200,30 +200,6 @@ const Sales = () => {
         setCreateOpen(false);
         
         toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
-
-        // Générer la facture localement et naviguer vers la page des factures
-        const savedInvoices = localStorage.getItem('invoices');
-        const existingInvoices = savedInvoices ? JSON.parse(savedInvoices) : [];
-        const invoiceNumber = `FAC-${new Date().getFullYear()}-${String(existingInvoices.length + 1).padStart(3, '0')}`;
-        
-        const newInvoice = {
-          id: sale._id,
-          number: invoiceNumber,
-          client: sale.customer,
-          date: sale.createdAt,
-          items: sale.items.map((item: any) => ({
-            productId: item.productId,
-            productName: item.productName,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            total: item.total,
-          })),
-          total: sale.total,
-          status: 'pending',
-          typeVente: sale.typeVente,
-        };
-
-        navigate('/invoices', { state: { newInvoice } });
       } else {
         toast({ title: "Erreur", description: data.message || "Erreur lors de la création de la vente", variant: "destructive" });
       }
