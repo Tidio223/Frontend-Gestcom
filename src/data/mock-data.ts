@@ -16,6 +16,7 @@ export interface Invoice {
   items: InvoiceItem[];
   total: number;
   status: "paid" | "pending" | "overdue";
+  typeVente?: 'gros' | 'detail';
 }
 
 export interface InvoiceItem {

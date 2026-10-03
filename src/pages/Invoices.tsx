@@ -22,6 +22,7 @@ const statusConfig = {
 const Invoices = () => {
   const [invoiceList, setInvoiceList] = useState<Invoice[]>(initialInvoices);
   const [search, setSearch] = useState("");
+  const [filterTypeVente, setFilterTypeVente] = useState<'all' | 'gros' | 'detail'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -51,8 +52,9 @@ const Invoices = () => {
   }, [location.state]);
 
   const filtered = invoiceList.filter(inv => 
-    inv.number.toLowerCase().includes(search.toLowerCase()) ||
-    inv.client.toLowerCase().includes(search.toLowerCase())
+    (filterTypeVente === 'all' || inv.typeVente === filterTypeVente) &&
+    (inv.number.toLowerCase().includes(search.toLowerCase()) ||
+    inv.client.toLowerCase().includes(search.toLowerCase()))
   );
 
   const addItem = () => {
@@ -237,6 +239,16 @@ const Invoices = () => {
               className="pl-10" 
             />
           </div>
+          <Select value={filterTypeVente} onValueChange={(v: 'all' | 'gros' | 'detail') => setFilterTypeVente(v)}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Type de vente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous</SelectItem>
+              <SelectItem value="detail">Détail</SelectItem>
+              <SelectItem value="gros">Gros</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -312,6 +324,7 @@ const Invoices = () => {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">N° Facture</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Client</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">Montant</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground">Statut</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground">Actions</th>
@@ -325,6 +338,15 @@ const Invoices = () => {
                   <td className="px-4 py-3 font-medium text-card-foreground">{inv.number}</td>
                   <td className="px-4 py-3 text-muted-foreground">{inv.client}</td>
                   <td className="px-4 py-3 text-muted-foreground">{new Date(inv.date).toLocaleDateString("fr-FR")}</td>
+                  <td className="px-4 py-3">
+                    {inv.typeVente ? (
+                      <Badge variant={inv.typeVente === 'gros' ? 'default' : 'secondary'} className="text-xs">
+                        {inv.typeVente === 'gros' ? 'Gros' : 'Détail'}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold text-card-foreground">{formatCurrency(inv.total)}</td>
                   <td className="px-4 py-3 text-center">
                     <Badge variant="outline" className={sc.className}>{sc.label}</Badge>
@@ -370,6 +392,11 @@ const Invoices = () => {
                   <h1 className="text-3xl font-bold text-gray-900">FACTURE</h1>
                   <p className="text-lg text-gray-900">N° {viewInvoice.number}</p>
                   <p className="text-sm text-gray-600">Date: {new Date(viewInvoice.date).toLocaleDateString('fr-FR')}</p>
+                  {viewInvoice.typeVente && (
+                    <p className="text-sm font-semibold text-gray-900 mt-1">
+                      Type de vente: {viewInvoice.typeVente === 'gros' ? 'Vente en gros' : 'Vente au détail'}
+                    </p>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-8 mb-6">

@@ -61,6 +61,8 @@ const Products = () => {
             name: p.name,
             category: p.category,
             price: p.price,
+            prixGros: p.prixGros || p.price || 0,
+            prixDetail: p.prixDetail || p.price || 0,
             stock: p.stock,
             minStock: p.minStock,
             unit: 'unité', // Valeur par défaut si non fournie
@@ -115,7 +117,9 @@ const Products = () => {
         body: JSON.stringify({
           name: fd.get("name"),
           category: fd.get("category"),
-          price: Number(fd.get("price")),
+          prixGros: Number(fd.get("prixGros")),
+          prixDetail: Number(fd.get("prixDetail")),
+          price: Number(fd.get("prixDetail")), // Utiliser prixDetail comme prix principal pour compatibilité
           stock: Number(fd.get("stock")),
           minStock: Number(fd.get("minStock")),
           unit: fd.get("unit"),
@@ -129,6 +133,8 @@ const Products = () => {
           name: data.data.name,
           category: data.data.category,
           price: data.data.price,
+          prixGros: data.data.prixGros || data.data.price || 0,
+          prixDetail: data.data.prixDetail || data.data.price || 0,
           stock: data.data.stock,
           minStock: data.data.minStock,
           unit: data.data.unit || 'unité',
@@ -162,25 +168,80 @@ const Products = () => {
     }
   };
 
-  const handleEdit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedProduct) return;
     const fd = new FormData(e.currentTarget);
-    const updatedProduct: Product = {
-      ...selectedProduct,
-      name: fd.get("name") as string,
-      category: fd.get("category") as string,
-      price: Number(fd.get("price")),
-      stock: Number(fd.get("stock")),
-      minStock: Number(fd.get("minStock")),
-      unit: fd.get("unit") as string,
-    };
-    const updatedList = productList.map((p) => (p.id === selectedProduct.id ? updatedProduct : p));
-    setProductList(updatedList);
-    localStorage.setItem('products', JSON.stringify(updatedList));
-    setEditOpen(false);
-    setSelectedProduct(null);
-    toast({ title: "Produit modifié", description: `${updatedProduct.name} a été mis à jour.` });
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast({ title: "Erreur", description: "Vous devez être connecté pour modifier un produit", variant: "destructive" });
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/products/${selectedProduct.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: fd.get("name"),
+          category: fd.get("category"),
+          prixGros: Number(fd.get("prixGros")),
+          prixDetail: Number(fd.get("prixDetail")),
+          price: Number(fd.get("prixDetail")),
+          stock: Number(fd.get("stock")),
+          minStock: Number(fd.get("minStock")),
+          unit: fd.get("unit"),
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const updatedProduct: Product = {
+          id: data.data._id,
+          name: data.data.name,
+          category: data.data.category,
+          price: data.data.price,
+          prixGros: data.data.prixGros || data.data.price || 0,
+          prixDetail: data.data.prixDetail || data.data.price || 0,
+          stock: data.data.stock,
+          minStock: data.data.minStock,
+          unit: data.data.unit || 'unité',
+        };
+        const updatedList = productList.map((p) => (p.id === selectedProduct.id ? updatedProduct : p));
+        setProductList(updatedList);
+        localStorage.setItem('products', JSON.stringify(updatedList));
+        setEditOpen(false);
+        setSelectedProduct(null);
+        toast({ title: "Produit modifié", description: `${updatedProduct.name} a été mis à jour.` });
+      } else {
+        const error = await response.json();
+        toast({ title: "Erreur", description: error.message || "Impossible de modifier le produit", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error updating product:', error);
+      // Fallback vers localStorage si l'API échoue
+      const updatedProduct: Product = {
+        ...selectedProduct,
+        name: fd.get("name") as string,
+        category: fd.get("category") as string,
+        price: Number(fd.get("prixDetail")),
+        prixGros: Number(fd.get("prixGros")),
+        prixDetail: Number(fd.get("prixDetail")),
+        stock: Number(fd.get("stock")),
+        minStock: Number(fd.get("minStock")),
+        unit: fd.get("unit") as string,
+      };
+      const updatedList = productList.map((p) => (p.id === selectedProduct.id ? updatedProduct : p));
+      setProductList(updatedList);
+      localStorage.setItem('products', JSON.stringify(updatedList));
+      setEditOpen(false);
+      setSelectedProduct(null);
+      toast({ title: "Produit modifié (local)", description: `${updatedProduct.name} a été modifié localement.` });
+    }
   };
 
   const handleDelete = () => {
@@ -313,13 +374,17 @@ const Products = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Prix unitaire</Label>
-                    <Input name="price" type="number" min="0" placeholder="0" required />
+                    <Label>Prix de gros</Label>
+                    <Input name="prixGros" type="number" min="0" placeholder="0" required />
                   </div>
                   <div className="space-y-2">
-                    <Label>Unité</Label>
-                    <Input name="unit" placeholder="unité, kg, litre..." defaultValue="unité" required />
+                    <Label>Prix de détail</Label>
+                    <Input name="prixDetail" type="number" min="0" placeholder="0" required />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Unité</Label>
+                  <Input name="unit" placeholder="unité, kg, litre..." defaultValue="unité" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -424,7 +489,8 @@ const Products = () => {
             <tr className="border-b border-border bg-muted/50">
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Produit</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Catégorie</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Prix</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Prix Gros</th>
+              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Prix Détail</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stock</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground">Statut</th>
               <th className="px-4 py-3 text-center font-medium text-muted-foreground">Actions</th>
@@ -437,7 +503,8 @@ const Products = () => {
                 <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium text-card-foreground">{p.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
-                  <td className="px-4 py-3 text-right text-card-foreground">{formatCurrency(p.price)}</td>
+                  <td className="px-4 py-3 text-right text-card-foreground">{formatCurrency((p as any).prixGros || p.price)}</td>
+                  <td className="px-4 py-3 text-right text-card-foreground">{formatCurrency((p as any).prixDetail || p.price)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={cn("font-semibold", isLow ? "text-warning" : "text-card-foreground")}>
                       {p.stock}
@@ -511,8 +578,12 @@ const Products = () => {
                   <Input name="unit" defaultValue={selectedProduct.unit} placeholder="kg, m, pièce..." required />
                 </div>
                 <div>
-                  <Label>Prix unitaire</Label>
-                  <Input name="price" type="number" defaultValue={selectedProduct.price} required />
+                  <Label>Prix de gros</Label>
+                  <Input name="prixGros" type="number" defaultValue={(selectedProduct as any).prixGros || selectedProduct.price} required />
+                </div>
+                <div>
+                  <Label>Prix de détail</Label>
+                  <Input name="prixDetail" type="number" defaultValue={(selectedProduct as any).prixDetail || selectedProduct.price} required />
                 </div>
                 <div>
                   <Label>Stock initial</Label>

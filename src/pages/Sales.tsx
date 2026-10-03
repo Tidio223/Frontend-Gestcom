@@ -35,6 +35,8 @@ interface Product {
   _id: string;
   name: string;
   price: number;
+  prixGros?: number;
+  prixDetail?: number;
   stock: number;
   unit: string;
 }
@@ -44,6 +46,7 @@ const Sales = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
   const [customer, setCustomer] = useState("");
+  const [typeVente, setTypeVente] = useState<'gros' | 'detail'>('detail');
   const [productList, setProductList] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
@@ -112,9 +115,15 @@ const Sales = () => {
   const updateItem = (index: number, productId: string) => {
     const product = productList.find((p) => p._id === productId);
     if (!product) return;
+    
+    // Déterminer le prix selon le type de vente
+    const priceToUse = typeVente === 'gros' 
+      ? (product.prixGros || product.price || 0)
+      : (product.prixDetail || product.price || 0);
+    
     setItems((prev) =>
       prev.map((item, i) =>
-        i === index ? { ...item, productId, productName: product.name, unitPrice: product.price, total: product.price * item.quantity } : item
+        i === index ? { ...item, productId, productName: product.name, unitPrice: priceToUse, total: priceToUse * item.quantity } : item
       )
     );
   };
@@ -140,6 +149,24 @@ const Sales = () => {
     );
   };
 
+  // Recalculer tous les prix quand le type de vente change
+  const handleTypeVenteChange = (newType: 'gros' | 'detail') => {
+    setTypeVente(newType);
+    setItems((prev) =>
+      prev.map((item) => {
+        if (!item.productId) return item;
+        const product = productList.find((p) => p._id === item.productId);
+        if (!product) return item;
+        
+        const priceToUse = newType === 'gros' 
+          ? (product.prixGros || product.price || 0)
+          : (product.prixDetail || product.price || 0);
+        
+        return { ...item, unitPrice: priceToUse, total: priceToUse * item.quantity };
+      })
+    );
+  };
+
   const handleCreateSale = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!customer || items.length === 0) {
@@ -154,7 +181,7 @@ const Sales = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ customer, items }),
+        body: JSON.stringify({ customer, items, typeVente }),
       });
 
       const data = await response.json();
@@ -237,6 +264,27 @@ const Sales = () => {
                 />
               </div>
               <div>
+                <Label>Type de vente</Label>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    type="button"
+                    variant={typeVente === 'detail' ? 'default' : 'outline'}
+                    onClick={() => handleTypeVenteChange('detail')}
+                    className="flex-1"
+                  >
+                    Vente au détail
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={typeVente === 'gros' ? 'default' : 'outline'}
+                    onClick={() => handleTypeVenteChange('gros')}
+                    className="flex-1"
+                  >
+                    Vente en gros
+                  </Button>
+                </div>
+              </div>
+              <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label>Articles</Label>
                   <Button type="button" variant="outline" size="sm" onClick={addItem}>
@@ -272,7 +320,7 @@ const Sales = () => {
                                       setItems(prev => prev.map((it, idx) => idx === i ? { ...it, showDropdown: false } : it));
                                     }}
                                   >
-                                    {p.name} - {formatCurrency(p.price)}
+                                    {p.name} - {formatCurrency(typeVente === 'gros' ? (p.prixGros || p.price) : (p.prixDetail || p.price))}
                                   </div>
                                 ))}
                               {productList.filter(p => p.name.toLowerCase().includes((item.productName || '').toLowerCase())).length === 0 && (
