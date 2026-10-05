@@ -30,16 +30,20 @@ const Reports = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         const invoicesData = await invoicesRes.json();
+        console.log('Invoices response:', invoicesData);
         
         const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const salesData = await salesRes.json();
+        console.log('Sales response:', salesData);
         
         if (invoicesData.success) {
+          console.log('Setting invoices:', invoicesData.data);
           setInvoices(invoicesData.data);
         }
         if (salesData.success) {
+          console.log('Setting sales:', salesData.data);
           setSales(salesData.data);
         }
       } catch (error) {
@@ -84,11 +88,11 @@ const Reports = () => {
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
     // Utiliser les factures chargées depuis l'API
-    const paidInvoices = invoices.filter((inv: any) => inv.status === 'paid');
+    const allPaidInvoices = invoices.filter((inv: any) => inv.status === 'paid');
     
     // Filtrer les factures selon la période
-    const filteredInvoices = paidInvoices.filter((inv: any) => {
-      const invoiceDate = new Date(inv.date);
+    const filteredInvoices = allPaidInvoices.filter((inv: any) => {
+      const invoiceDate = new Date(inv.date || inv.createdAt);
       const start = new Date(startDate);
       const end = new Date(endDate);
       start.setHours(0, 0, 0, 0);
@@ -97,7 +101,8 @@ const Reports = () => {
       return invoiceDate >= start && invoiceDate <= end;
     });
 
-    const displayInvoices = filteredInvoices.length > 0 ? filteredInvoices : paidInvoices;
+    // Utiliser les factures filtrées, ou toutes si aucune n'est trouvée dans la période
+    const displayInvoices = filteredInvoices.length > 0 ? filteredInvoices : allPaidInvoices;
 
     switch (type) {
       case "sales":
