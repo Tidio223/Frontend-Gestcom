@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { API_BASE_URL } from "@/config/api";
+import { COMPANY_INFO } from "@/config/company";
+import "@/styles/print.css";
 
 const statusConfig = {
   pending: { label: "En attente", className: "bg-yellow-100 text-yellow-800 border-yellow-200" },
@@ -227,34 +229,191 @@ const Invoices = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     
+    const companyInfo = COMPANY_INFO;
+    const itemsHtml = invoice.items.map(item => `
+      <tr>
+        <td>${item.productName}</td>
+        <td style="text-align: center;">${item.quantity}</td>
+        <td style="text-align: right;">${formatCurrency(item.unitPrice)}</td>
+        <td style="text-align: right;">${formatCurrency(item.total)}</td>
+      </tr>
+    `).join('');
+    
     const html = `
       <!DOCTYPE html>
       <html>
         <head>
           <title>Facture ${invoice.number}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .info { margin-bottom: 20px; }
-            .items { margin: 20px 0; }
-            .item { display: flex; justify-content: space-between; margin: 10px 0; }
-            .total { border-top: 2px solid #000; padding-top: 10px; font-weight: bold; }
-            @media print { body { margin: 0; } }
+            @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0; 
+              padding: 15mm; 
+              background: white; 
+              color: black;
+            }
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            .document-header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 20px;
+            }
+            .document-header h1 {
+              font-size: 24pt;
+              font-weight: bold;
+              margin: 0 0 10px 0;
+            }
+            .info-section {
+              display: flex;
+              justify-content: space-between;
+              gap: 30px;
+              margin-bottom: 30px;
+            }
+            .info-box {
+              flex: 1;
+            }
+            .info-box h3 {
+              font-weight: bold;
+              margin-bottom: 10px;
+              font-size: 14pt;
+            }
+            .info-box p {
+              margin: 5px 0;
+              font-size: 11pt;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+            }
+            th, td {
+              border: 1px solid #000;
+              padding: 8px;
+              text-align: left;
+            }
+            th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            .total-section {
+              display: flex;
+              justify-content: flex-end;
+              margin: 30px 0;
+            }
+            .total-box {
+              border: 2px solid #000;
+              padding: 15px;
+              width: 200px;
+              text-align: right;
+            }
+            .signature-section {
+              margin-top: 40px;
+            }
+            .signature-row {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 60px;
+            }
+            .signature-box {
+              width: 45%;
+              text-align: center;
+            }
+            .signature-line {
+              border-top: 1px solid #000;
+              margin-top: 40px;
+              padding-top: 10px;
+            }
+            .legal-section {
+              border-top: 1px solid #000;
+              padding-top: 15px;
+              margin-top: 30px;
+              font-size: 9pt;
+            }
+            @media print {
+              body { margin: 0; }
+            }
           </style>
         </head>
-        <body>
-          ${element.innerHTML}
+        <body class="print-window-body">
+          <div class="document-header">
+            <h1>FACTURE</h1>
+            <p>N° ${invoice.number}</p>
+            <p>Date: ${new Date(invoice.date).toLocaleDateString('fr-FR')}</p>
+            ${invoice.typeVente ? `<p>Type de vente: ${invoice.typeVente === 'gros' ? 'Vente en gros' : 'Vente au détail'}</p>` : ''}
+          </div>
+          
+          <div class="info-section">
+            <div class="info-box">
+              <h3>Émetteur</h3>
+              <p style="font-weight: bold;">${companyInfo.name}</p>
+              <p>${companyInfo.description}</p>
+              <p>E-mail : ${companyInfo.email}</p>
+              <p>Tél : ${companyInfo.phone}</p>
+              <p>Compte ${companyInfo.bank.name} : ${companyInfo.bank.account}</p>
+              <p>${companyInfo.bank.location}</p>
+            </div>
+            <div class="info-box">
+              <h3>Destinataire</h3>
+              <p style="font-weight: bold;">${invoice.client}</p>
+            </div>
+          </div>
+
+          <h3>Détail des produits/services</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Désignation</th>
+                <th style="text-align: center;">Quantité</th>
+                <th style="text-align: right;">Prix unitaire HT</th>
+                <th style="text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="total-section">
+            <div class="total-box">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="font-weight: bold;">Total:</span>
+                <span style="font-weight: bold;">${formatCurrency(invoice.total)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="signature-section">
+            <div class="signature-row">
+              <div class="signature-box">
+                <div class="signature-line">
+                  <p>Signature du client</p>
+                </div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-line">
+                  <p>Signature du vendeur</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <p>Merci pour votre confiance.</p>
+          </div>
         </body>
       </html>
     `;
     
     printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-    
-    toast({ title: "Impression lancée", description: `Facture ${invoice.number} prête à être imprimée` });
+    printWindow.onload = () => {
+      printWindow.print();
+    };
   };
 
   return (
@@ -422,8 +581,8 @@ const Invoices = () => {
           <DialogHeader><DialogTitle>Facture {viewInvoice?.number}</DialogTitle></DialogHeader>
           {viewInvoice && (
             <>
-              <div id={`invoice-${viewInvoice.id}`} className="p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
-                <div className="text-center border-b-2 border-gray-900 pb-4 mb-6">
+              <div id={`invoice-${viewInvoice.id}`} className="print-document p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <div className="document-header">
                   <h1 className="text-3xl font-bold text-gray-900">FACTURE</h1>
                   <p className="text-lg text-gray-900">N° {viewInvoice.number}</p>
                   <p className="text-sm text-gray-600">Date: {new Date(viewInvoice.date).toLocaleDateString('fr-FR')}</p>
@@ -434,20 +593,19 @@ const Invoices = () => {
                   )}
                 </div>
                 
-                <div className="grid grid-cols-2 gap-8 mb-6">
-                  <div>
+                <div className="info-section">
+                  <div className="info-box">
                     <h3 className="font-bold mb-2 text-gray-900">Émetteur</h3>
-                    <p className="text-sm text-gray-900">GestCom</p>
-                    <p className="text-sm text-gray-900">123 Rue de la République</p>
-                    <p className="text-sm text-gray-900">75001 Paris</p>
-                    <p className="text-sm text-gray-900">Tél: 01 23 45 67 89</p>
-                    <p className="text-sm text-gray-900">Email: contact@gestcom.com</p>
+                    <p className="text-sm text-gray-900 font-semibold">{COMPANY_INFO.name}</p>
+                    <p className="text-sm text-gray-900">{COMPANY_INFO.description}</p>
+                    <p className="text-sm text-gray-900">E-mail : {COMPANY_INFO.email}</p>
+                    <p className="text-sm text-gray-900">Tél : {COMPANY_INFO.phone}</p>
+                    <p className="text-sm text-gray-900">Compte {COMPANY_INFO.bank.name} : {COMPANY_INFO.bank.account}</p>
+                    <p className="text-sm text-gray-900">{COMPANY_INFO.bank.location}</p>
                   </div>
-                  <div>
+                  <div className="info-box">
                     <h3 className="font-bold mb-2 text-gray-900">Destinataire</h3>
                     <p className="text-sm font-medium text-gray-900">{viewInvoice.client}</p>
-                    <p className="text-sm text-gray-600">Adresse du client</p>
-                    <p className="text-sm text-gray-600">Ville, Code postal</p>
                   </div>
                 </div>
 
@@ -475,8 +633,8 @@ const Invoices = () => {
                   </table>
                 </div>
 
-                <div className="flex justify-end mb-6">
-                  <div className="border border-gray-300 p-4 w-64 bg-gray-50">
+                <div className="total-section">
+                  <div className="total-box bg-gray-50">
                     <div className="flex justify-between">
                       <span className="font-bold text-lg text-gray-900">Total:</span>
                       <span className="font-bold text-lg text-gray-900">{formatCurrency(viewInvoice.total)}</span>
@@ -484,14 +642,27 @@ const Invoices = () => {
                   </div>
                 </div>
 
-                <div className="border-t border-gray-300 pt-4 text-xs text-gray-600">
-                  <p className="mb-2 text-gray-900"><strong>Mentions légales:</strong></p>
-                  <p className="mb-1 text-gray-600">En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.</p>
-                  <p className="text-gray-600">TVA non applicable, art. 293 B du CGI</p>
+                <div className="signature-section">
+                  <div className="signature-row">
+                    <div className="signature-box">
+                      <div className="signature-line">
+                        <p className="text-sm text-gray-900">Signature du client</p>
+                      </div>
+                    </div>
+                    <div className="signature-box">
+                      <div className="signature-line">
+                        <p className="text-sm text-gray-900">Signature du vendeur</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="legal-section">
+                  <p className="text-gray-600">Merci pour votre confiance.</p>
                 </div>
               </div>
               
-              <div className="flex justify-center gap-2 mt-6">
+              <div className="flex justify-center gap-2 mt-6 print-hide">
                 <Button onClick={() => printInvoice(viewInvoice)}>
                   <Printer className="mr-2 h-4 w-4" />
                   Imprimer

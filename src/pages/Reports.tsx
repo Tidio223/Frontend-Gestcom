@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Eye, FileText } from "lucide-react";
-import { Download, TrendingUp, DollarSign, Users, Package } from "lucide-react";
+import { Download, TrendingUp, DollarSign, Users, Package, Printer } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { API_BASE_URL } from "@/config/api";
+import { COMPANY_INFO } from "@/config/company";
+import "@/styles/print.css";
 
 const Reports = () => {
   const [selectedReport, setSelectedReport] = useState<string>("");
@@ -340,6 +342,138 @@ const Reports = () => {
       console.error('Error generating PDF:', error);
     }
   };
+
+  const printReport = () => {
+    const element = document.getElementById('report-viewer');
+    if (!element) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Rapport - ${viewingReport.title}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0; 
+              padding: 15mm; 
+              background: white; 
+              color: black;
+            }
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            .document-header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 20px;
+            }
+            .document-header h2 {
+              font-size: 20pt;
+              font-weight: bold;
+              margin: 0 0 10px 0;
+            }
+            .summary-section {
+              margin-bottom: 30px;
+            }
+            .summary-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 15px;
+              margin-top: 15px;
+            }
+            .summary-item {
+              border: 1px solid #000;
+              padding: 10px;
+              background: #f9f9f9;
+            }
+            .summary-item p:first-child {
+              font-size: 9pt;
+              margin: 0 0 5px 0;
+            }
+            .summary-item p:last-child {
+              font-size: 14pt;
+              font-weight: bold;
+              margin: 0;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+            }
+            th, td {
+              border: 1px solid #000;
+              padding: 8px;
+              text-align: left;
+            }
+            th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            tr {
+              page-break-inside: avoid;
+            }
+            @media print {
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body class="print-window-body">
+          <div class="document-header">
+            <h2>${viewingReport.title}</h2>
+            <p>Rapport généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+            <p style="font-size: 10pt;">${COMPANY_INFO.name} - ${COMPANY_INFO.description}</p>
+          </div>
+          
+          ${viewingReport.summary && Object.keys(viewingReport.summary).length > 0 ? `
+          <div class="summary-section">
+            <h3 style="font-size: 14pt; margin-bottom: 10px;">Résumé</h3>
+            <div class="summary-grid">
+              ${Object.entries(viewingReport.summary).map(([key, value]) => `
+                <div class="summary-item">
+                  <p>${key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                  <p>${String(value)}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          ` : ''}
+
+          <h3 style="font-size: 14pt; margin-bottom: 10px;">Détails</h3>
+          <table>
+            <thead>
+              <tr>
+                ${viewingReport.data.length > 0 ? Object.keys(viewingReport.data[0]).map(header => `
+                  <th>${header.charAt(0).toUpperCase() + header.slice(1)}</th>
+                `).join('') : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${viewingReport.data.map((row: any) => `
+                <tr>
+                  ${Object.values(row).map((value: any) => `
+                    <td>${String(value)}</td>
+                  `).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -554,8 +688,8 @@ const Reports = () => {
 
       {/* Report Viewer Modal */}
       {viewingReport && (
-        <div id="report-viewer" key={currentReportType} className="mt-6 p-6 bg-white text-black rounded-lg border border-gray-300 shadow-lg">
-          <div className="flex items-center justify-between mb-6">
+        <div id="report-viewer" key={currentReportType} className="print-document mt-6 p-6 bg-white text-black rounded-lg border border-gray-300 shadow-lg">
+          <div className="document-header flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold flex items-center space-x-2 text-black">
                 <FileText className="h-6 w-6 text-black" />
@@ -564,8 +698,15 @@ const Reports = () => {
               <p className="text-gray-700 mt-2">
                 Rapport généré le {new Date().toLocaleDateString('fr-FR')}
               </p>
+              <p className="text-sm text-gray-600 mt-1">{COMPANY_INFO.name} - {COMPANY_INFO.description}</p>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 print-hide">
+              <Button 
+                onClick={printReport}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimer
+              </Button>
               <Button 
                 onClick={() => handleDownloadReport(currentReportType, "pdf")}
               >

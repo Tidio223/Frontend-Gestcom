@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, AlertTriangle, Edit, Trash2, History, Package } from "lucide-react";
+import { Search, Plus, AlertTriangle, Edit, Trash2, History, Package, Printer } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { products as initialProducts, Product, formatCurrency } from "@/data/moc
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE_URL } from "@/config/api";
+import { COMPANY_INFO } from "@/config/company";
+import "@/styles/print.css";
 
 interface StockMovement {
   id: string;
@@ -282,6 +284,125 @@ const Products = () => {
     setHistoryOpen(true);
   };
 
+  const printInventory = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const itemsHtml = filtered.map(p => `
+      <tr>
+        <td>${p.name}</td>
+        <td>${p.category}</td>
+        <td style="text-align: right;">${formatCurrency((p as any).prixGros || p.price)}</td>
+        <td style="text-align: right;">${formatCurrency((p as any).prixDetail || p.price)}</td>
+        <td style="text-align: right;">${p.stock} ${p.unit}</td>
+        <td style="text-align: center;">${p.stock <= p.minStock ? 'Stock bas' : 'En stock'}</td>
+      </tr>
+    `).join('');
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Inventaire - ${COMPANY_INFO.name}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0; 
+              padding: 15mm; 
+              background: white; 
+              color: black;
+            }
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            .document-header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 20px;
+            }
+            .document-header h1 {
+              font-size: 24pt;
+              font-weight: bold;
+              margin: 0 0 10px 0;
+            }
+            .info-section {
+              margin-bottom: 20px;
+            }
+            .info-section p {
+              margin: 5px 0;
+              font-size: 11pt;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+            }
+            th, td {
+              border: 1px solid #000;
+              padding: 8px;
+              text-align: left;
+            }
+            th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            tr {
+              page-break-inside: avoid;
+            }
+            thead {
+              display: table-header-group;
+            }
+            @media print {
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body class="print-window-body">
+          <div class="document-header">
+            <h1>INVENTAIRE</h1>
+            <p>Date: ${new Date().toLocaleDateString('fr-FR')}</p>
+          </div>
+          
+          <div class="info-section">
+            <p style="font-weight: bold;">${COMPANY_INFO.name}</p>
+            <p>${COMPANY_INFO.description}</p>
+            <p>E-mail : ${COMPANY_INFO.email}</p>
+            <p>Tél : ${COMPANY_INFO.phone}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th>Catégorie</th>
+                <th style="text-align: right;">Prix Gros</th>
+                <th style="text-align: right;">Prix Détail</th>
+                <th style="text-align: right;">Stock</th>
+                <th style="text-align: center;">Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          
+          <div style="margin-top: 30px; font-size: 10pt;">
+            <p>Total des produits: ${filtered.length}</p>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   const handleStockMovement = (e: React.FormEvent) => {
     e.preventDefault();
     if (!stockManagementProductId) {
@@ -472,6 +593,9 @@ const Products = () => {
               </form>
             </DialogContent>
           </Dialog>
+          <Button variant="outline" onClick={printInventory}>
+            <Printer className="mr-2 h-4 w-4" />Imprimer l'inventaire
+          </Button>
         </div>
       </div>
 

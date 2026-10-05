@@ -1,0 +1,290 @@
+/* Styles d'impression communs pour GestCom */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  /* Masquer les éléments de l'interface */
+  .sidebar,
+  header,
+  nav,
+  button,
+  .dialog-content button,
+  .print-hide,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Masquer les overlays et modals */
+  .dialog-overlay,
+  .dialog-content::before,
+  .dialog-content::after {
+    display: none !important;
+  }
+
+  /* Style de base pour le document imprimé */
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: Arial, sans-serif;
+    font-size: 12pt;
+    line-height: 1.4;
+  }
+
+  /* Conteneur principal du document */
+  .print-document {
+    background: white !important;
+    color: black !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Styles pour les tableaux */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  th, td {
+    border: 1px solid #000 !important;
+    padding: 8px !important;
+    text-align: left !important;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-weight: bold !important;
+  }
+
+  /* Éviter les coupures dans les sections importantes */
+  .no-break {
+    page-break-inside: avoid !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+  }
+
+  /* Zone de signature - garder ensemble */
+  .signature-section {
+    page-break-inside: avoid !important;
+    margin-top: 40px !important;
+  }
+
+  .signature-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: 60px !important;
+  }
+
+  .signature-box {
+    width: 45% !important;
+    text-align: center !important;
+  }
+
+  .signature-line {
+    border-top: 1px solid #000 !important;
+    margin-top: 40px !important;
+    padding-top: 10px !important;
+  }
+
+  /* En-tête de document */
+  .document-header {
+    text-align: center !important;
+    margin-bottom: 30px !important;
+    border-bottom: 2px solid #000 !important;
+    padding-bottom: 20px !important;
+  }
+
+  .document-header h1 {
+    font-size: 24pt !important;
+    font-weight: bold !important;
+    margin: 0 0 10px 0 !important;
+  }
+
+  /* Section d'information émetteur/destinataire */
+  .info-section {
+    margin-bottom: 30px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 30px !important;
+  }
+
+  .info-box {
+    flex: 1 !important;
+  }
+
+  .info-box h3 {
+    font-weight: bold !important;
+    margin-bottom: 10px !important;
+    font-size: 14pt !important;
+  }
+
+  .info-box p {
+    margin: 5px 0 !important;
+    font-size: 11pt !important;
+  }
+
+  /* Section total */
+  .total-section {
+    display: flex !important;
+    justify-content: flex-end !important;
+    margin: 30px 0 !important;
+    page-break-inside: avoid !important;
+  }
+
+  .total-box {
+    border: 2px solid #000 !important;
+    padding: 15px !important;
+    width: 200px !important;
+    text-align: right !important;
+  }
+
+  /* Mentions légales */
+  .legal-section {
+    border-top: 1px solid #000 !important;
+    padding-top: 15px !important;
+    margin-top: 30px !important;
+    font-size: 9pt !important;
+  }
+
+  /* Pour le contenu dans les Dialog */
+  .dialog-content {
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+  }
+
+  /* Masquer le bouton de fermeture des dialogs */
+  .dialog-close {
+    display: none !important;
+  }
+}
+
+/* Styles pour l'impression via window.open (factures) */
+.print-window-body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 15mm;
+  background: white;
+  color: black;
+}
+
+.print-window-body .document-header {
+  text-align: center;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 20px;
+}
+
+.print-window-body .document-header h1 {
+  font-size: 24pt;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+}
+
+.print-window-body .info-section {
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.print-window-body .info-box {
+  flex: 1;
+}
+
+.print-window-body .info-box h3 {
+  font-weight: bold;
+  margin-bottom: 10px;
+  font-size: 14pt;
+}
+
+.print-window-body .info-box p {
+  margin: 5px 0;
+  font-size: 11pt;
+}
+
+.print-window-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+.print-window-body th,
+.print-window-body td {
+  border: 1px solid #000;
+  padding: 8px;
+  text-align: left;
+}
+
+.print-window-body th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+.print-window-body .total-section {
+  display: flex;
+  justify-content: flex-end;
+  margin: 30px 0;
+}
+
+.print-window-body .total-box {
+  border: 2px solid #000;
+  padding: 15px;
+  width: 200px;
+  text-align: right;
+}
+
+.print-window-body .signature-section {
+  margin-top: 40px;
+}
+
+.print-window-body .signature-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 60px;
+}
+
+.print-window-body .signature-box {
+  width: 45%;
+  text-align: center;
+}
+
+.print-window-body .signature-line {
+  border-top: 1px solid #000;
+  margin-top: 40px;
+  padding-top: 10px;
+}
+
+.print-window-body .legal-section {
+  border-top: 1px solid #000;
+  padding-top: 15px;
+  margin-top: 30px;
+  font-size: 9pt;
+}
