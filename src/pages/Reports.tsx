@@ -87,11 +87,11 @@ const Reports = () => {
 
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-    // Utiliser les factures chargées depuis l'API
-    const allPaidInvoices = invoices.filter((inv: any) => inv.status === 'paid');
+    // Utiliser toutes les factures (pas seulement paid) pour afficher les données
+    const allInvoices = invoices;
     
     // Filtrer les factures selon la période
-    const filteredInvoices = allPaidInvoices.filter((inv: any) => {
+    const filteredInvoices = allInvoices.filter((inv: any) => {
       const invoiceDate = new Date(inv.date || inv.createdAt);
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -102,7 +102,7 @@ const Reports = () => {
     });
 
     // Utiliser les factures filtrées, ou toutes si aucune n'est trouvée dans la période
-    const displayInvoices = filteredInvoices.length > 0 ? filteredInvoices : allPaidInvoices;
+    const displayInvoices = filteredInvoices.length > 0 ? filteredInvoices : allInvoices;
 
     switch (type) {
       case "sales":
