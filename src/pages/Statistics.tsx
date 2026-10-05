@@ -92,6 +92,7 @@ const Statistics = () => {
         // Calculer les statistiques localement
         const now = new Date();
         let startDate: Date;
+        let endDate: Date = now;
         
         switch (selectedPeriod) {
           case 'day':
@@ -111,13 +112,25 @@ const Statistics = () => {
             startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         }
 
-        const filteredSales = sales.filter((sale: any) => {
+        // Utiliser les ventes directement pour les statistiques
+        const allSales = sales;
+        
+        // Filtrer les ventes selon la période
+        const filteredSales = allSales.filter((sale: any) => {
           const saleDate = new Date(sale.createdAt);
-          return saleDate >= startDate && saleDate <= now;
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          start.setHours(0, 0, 0, 0);
+          end.setHours(23, 59, 59, 999);
+          saleDate.setHours(0, 0, 0, 0);
+          return saleDate >= start && saleDate <= end;
         });
 
-        const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + sale.total, 0);
-        const totalOrders = filteredSales.length;
+        // Utiliser les ventes filtrées, ou toutes si aucune n'est trouvée dans la période
+        const displaySales = filteredSales.length > 0 ? filteredSales : allSales;
+
+        const totalRevenue = displaySales.reduce((sum: number, sale: any) => sum + sale.total, 0);
+        const totalOrders = displaySales.length;
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
         setSalesData({
