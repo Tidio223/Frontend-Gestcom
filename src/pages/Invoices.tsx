@@ -133,12 +133,30 @@ const Invoices = () => {
     }
   };
 
-  const markAsPaid = (invoice: Invoice) => {
-    const updatedInvoice = { ...invoice, status: "paid" as const };
-    const updatedList = invoiceList.map((inv) => inv.id === invoice.id ? updatedInvoice : inv);
-    setInvoiceList(updatedList);
-    localStorage.setItem('invoices', JSON.stringify(updatedList));
-    toast({ title: "Facture payée", description: `${invoice.number} est maintenant prise en compte dans les rapports` });
+  const markAsPaid = async (invoice: Invoice) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'paid' }),
+      });
+
+      if (response.ok) {
+        const updatedInvoice = { ...invoice, status: "paid" as const };
+        const updatedList = invoiceList.map((inv) => inv.id === invoice.id ? updatedInvoice : inv);
+        setInvoiceList(updatedList);
+        toast({ title: "Facture payée", description: `${invoice.number} est maintenant prise en compte dans les rapports` });
+      } else {
+        toast({ title: "Erreur", description: "Impossible de mettre à jour la facture", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error updating invoice status:', error);
+      toast({ title: "Erreur", description: "Erreur lors de la mise à jour", variant: "destructive" });
+    }
   };
 
   const updateInvoice = (invoice: Invoice) => {

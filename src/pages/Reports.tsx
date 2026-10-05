@@ -57,10 +57,12 @@ const Reports = () => {
   // Régénérer le rapport quand la période ou le type change
   useEffect(() => {
     if (currentReportType) {
+      console.log('Generating report for type:', currentReportType, 'with invoices:', invoices.length);
       const reportData = generateReportData(currentReportType, dateRange);
+      console.log('Generated report data:', reportData);
       setViewingReport(reportData);
     }
-  }, [dateRange, currentReportType]);
+  }, [dateRange, currentReportType, invoices]);
 
   const generateReportData = (type: string, period: string = "month", financialData?: any) => {
     const now = new Date();
