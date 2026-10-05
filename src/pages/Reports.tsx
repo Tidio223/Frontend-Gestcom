@@ -20,9 +20,10 @@ const Reports = () => {
   const [savedReports, setSavedReports] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const token = localStorage.getItem('token');
 
-  // Charger les factures et ventes depuis l'API
+  // Charger les factures, ventes et produits depuis l'API
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -38,6 +39,12 @@ const Reports = () => {
         const salesData = await salesRes.json();
         console.log('Sales response:', salesData);
         
+        const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const productsData = await productsRes.json();
+        console.log('Products response:', productsData);
+        
         if (invoicesData.success) {
           console.log('Setting invoices:', invoicesData.data);
           setInvoices(invoicesData.data);
@@ -45,6 +52,11 @@ const Reports = () => {
         if (salesData.success) {
           console.log('Setting sales:', salesData.data);
           setSales(salesData.data);
+        }
+        if (productsData.success) {
+          const productsArray = productsData.data.products || productsData.data;
+          console.log('Setting products:', productsArray);
+          setProducts(productsArray);
         }
       } catch (error) {
         console.error('Erreur chargement données:', error);
@@ -57,12 +69,12 @@ const Reports = () => {
   // Régénérer le rapport quand la période ou le type change
   useEffect(() => {
     if (currentReportType) {
-      console.log('Generating report for type:', currentReportType, 'with invoices:', invoices.length);
+      console.log('Generating report for type:', currentReportType, 'with sales:', sales.length, 'products:', products.length);
       const reportData = generateReportData(currentReportType, dateRange);
       console.log('Generated report data:', reportData);
       setViewingReport(reportData);
     }
-  }, [dateRange, currentReportType, invoices]);
+  }, [dateRange, currentReportType, sales, products]);
 
   const generateReportData = (type: string, period: string = "month", financialData?: any) => {
     const now = new Date();
@@ -89,22 +101,22 @@ const Reports = () => {
 
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-    // Utiliser toutes les factures (pas seulement paid) pour afficher les données
-    const allInvoices = invoices;
+    // Utiliser les ventes directement pour les rapports (plus fiable que les factures)
+    const allSales = sales;
     
-    // Filtrer les factures selon la période
-    const filteredInvoices = allInvoices.filter((inv: any) => {
-      const invoiceDate = new Date(inv.date || inv.createdAt);
+    // Filtrer les ventes selon la période
+    const filteredSales = allSales.filter((sale: any) => {
+      const saleDate = new Date(sale.createdAt);
       const start = new Date(startDate);
       const end = new Date(endDate);
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
-      invoiceDate.setHours(0, 0, 0, 0);
-      return invoiceDate >= start && invoiceDate <= end;
+      saleDate.setHours(0, 0, 0, 0);
+      return saleDate >= start && saleDate <= end;
     });
 
-    // Utiliser les factures filtrées, ou toutes si aucune n'est trouvée dans la période
-    const displayInvoices = filteredInvoices.length > 0 ? filteredInvoices : allInvoices;
+    // Utiliser les ventes filtrées, ou toutes si aucune n'est trouvée dans la période
+    const displaySales = filteredSales.length > 0 ? filteredSales : allSales;
 
     switch (type) {
       case "sales":
@@ -113,18 +125,18 @@ const Reports = () => {
           period: period,
           startDate: formatDate(startDate),
           endDate: formatDate(endDate),
-          data: displayInvoices.length > 0 ? displayInvoices.map((inv: any) => ({
-            date: new Date(inv.date).toLocaleDateString('fr-FR'),
-            product: inv.items.map((item: any) => item.productName).join(', '),
-            quantity: inv.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
-            amount: `${inv.total.toLocaleString('fr-FR')} FCFA`,
-            customer: inv.client
+          data: displaySales.length > 0 ? displaySales.map((sale: any) => ({
+            date: new Date(sale.createdAt).toLocaleDateString('fr-FR'),
+            product: sale.items.map((item: any) => item.productName).join(', '),
+            quantity: sale.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
+            amount: `${sale.total.toLocaleString('fr-FR')} FCFA`,
+            customer: sale.customer
           })) : [],
-          summary: displayInvoices.length > 0 ? {
-            totalSales: `${displayInvoices.reduce((sum: number, inv: any) => sum + inv.total, 0).toLocaleString('fr-FR')} FCFA`,
-            totalProducts: displayInvoices.reduce((sum: number, inv: any) => sum + inv.items.reduce((s: number, item: any) => s + item.quantity, 0), 0),
-            totalCustomers: displayInvoices.length,
-            averageSale: displayInvoices.length > 0 ? `${Math.round(displayInvoices.reduce((sum: number, inv: any) => sum + inv.total, 0) / displayInvoices.length).toLocaleString('fr-FR')} FCFA` : "0 FCFA"
+          summary: displaySales.length > 0 ? {
+            totalSales: `${displaySales.reduce((sum: number, sale: any) => sum + sale.total, 0).toLocaleString('fr-FR')} FCFA`,
+            totalProducts: displaySales.reduce((sum: number, sale: any) => sum + sale.items.reduce((s: number, item: any) => s + item.quantity, 0), 0),
+            totalCustomers: displaySales.length,
+            averageSale: displaySales.length > 0 ? `${Math.round(displaySales.reduce((sum: number, sale: any) => sum + sale.total, 0) / displaySales.length).toLocaleString('fr-FR')} FCFA` : "0 FCFA"
           } : {
             totalSales: "0 FCFA",
             totalProducts: 0,
@@ -138,18 +150,18 @@ const Reports = () => {
           period: period,
           startDate: formatDate(startDate),
           endDate: formatDate(endDate),
-          data: [
-            { product: "Ordinateur portable HP", stock: 15, reserved: 3, available: 12, status: "En stock" },
-            { product: "Souris sans fil Logitech", stock: 45, reserved: 8, available: 37, status: "En stock" },
-            { product: "Clavier mécanique", stock: 8, reserved: 2, available: 6, status: "Stock faible" },
-            { product: "Moniteur 27 pouces", stock: 0, reserved: 5, available: 0, status: "Rupture" },
-            { product: "Webcam HD", stock: 25, reserved: 4, available: 21, status: "En stock" },
-          ],
+          data: products.map((p: any) => ({
+            product: p.name,
+            stock: p.stock,
+            reserved: 0,
+            available: p.stock,
+            status: p.stock <= p.minStock ? "Stock faible" : "En stock"
+          })),
           summary: {
-            totalProducts: 5,
-            totalStock: 93,
-            totalReserved: 22,
-            totalAvailable: 76
+            totalProducts: products.length,
+            totalStock: products.reduce((sum: number, p: any) => sum + p.stock, 0),
+            totalReserved: 0,
+            totalAvailable: products.reduce((sum: number, p: any) => sum + p.stock, 0)
           }
         };
       case "customers":
