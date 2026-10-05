@@ -80,27 +80,7 @@ const Statistics = () => {
         return;
       }
 
-      // Récupérer les statistiques depuis l'API
-      const statsRes = await fetch(`${API_BASE_URL}/api/sales/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const statsData = await statsRes.json();
-
-      if (statsData.success) {
-        const stats = statsData.data;
-        setSalesData({
-          period: selectedPeriod === 'day' ? 'Aujourd\'hui' : 
-                  selectedPeriod === 'week' ? 'Cette semaine' : 
-                  selectedPeriod === 'month' ? 'Ce mois' : 'Cette année',
-          totalSales: stats.totalSales || 0,
-          totalRevenue: stats.todayTotal || 0,
-          totalOrders: stats.totalSales || 0,
-          averageOrderValue: stats.averageOrderValue || 0,
-          growthRate: 0
-        });
-      }
-
-      // Récupérer les ventes pour les produits les plus vendus
+      // Récupérer les ventes depuis l'API
       const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -108,6 +88,49 @@ const Statistics = () => {
 
       if (salesResData.success) {
         const sales = salesResData.data.sales || salesResData.data;
+        
+        // Calculer les statistiques localement
+        const now = new Date();
+        let startDate: Date;
+        
+        switch (selectedPeriod) {
+          case 'day':
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            break;
+          case 'week':
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - 7);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+          case 'year':
+            startDate = new Date(now.getFullYear(), 0, 1);
+            break;
+          default:
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+
+        const filteredSales = sales.filter((sale: any) => {
+          const saleDate = new Date(sale.createdAt);
+          return saleDate >= startDate && saleDate <= now;
+        });
+
+        const totalRevenue = filteredSales.reduce((sum: number, sale: any) => sum + sale.total, 0);
+        const totalOrders = filteredSales.length;
+        const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+        setSalesData({
+          period: selectedPeriod === 'day' ? 'Aujourd\'hui' : 
+                  selectedPeriod === 'week' ? 'Cette semaine' : 
+                  selectedPeriod === 'month' ? 'Ce mois' : 'Cette année',
+          totalSales: totalOrders,
+          totalRevenue: totalRevenue,
+          totalOrders: totalOrders,
+          averageOrderValue: averageOrderValue,
+          growthRate: 0
+        });
+
         // Calculer les produits les plus vendus
         const productSales: { [key: string]: { name: string; quantity: number; revenue: number } } = {};
         sales.forEach((sale: any) => {
@@ -131,15 +154,26 @@ const Statistics = () => {
           .sort((a, b) => b.revenue - a.revenue)
           .slice(0, 6);
 
-        const totalRevenue = topProductsData.reduce((sum, p) => sum + p.revenue, 0);
+        const totalRevenueTopProducts = topProductsData.reduce((sum, p) => sum + p.revenue, 0);
         topProductsData.forEach(p => {
-          p.percentage = totalRevenue > 0 ? Math.round((p.revenue / totalRevenue) * 100) : 0;
+          p.percentage = totalRevenueTopProducts > 0 ? Math.round((p.revenue / totalRevenueTopProducts) * 100) : 0;
         });
 
         setTopProducts(topProductsData);
+
+        // Calculer les données mensuelles
+        const monthlyData: any[] = [];
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          const monthName = date.toLocaleDateString('fr-FR', { month: 'long' });
+          monthlyData.push({ month: monthName, revenue: 0, orders: 0 });
+        }
+        setMonthlyData(monthlyData);
       }
     } catch (error) {
       console.error('Error fetching statistics:', error);
+      toast({ title: "Erreur", description: "Impossible de charger les statistiques", variant: "destructive" });
     } finally {
       setLoading(false);
     }

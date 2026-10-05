@@ -45,6 +45,7 @@ const Dashboard = () => {
       const salesData = await salesRes.json();
       if (salesData.success) {
         const salesArray = salesData.data.sales || salesData.data;
+        console.log('Dashboard sales:', salesArray);
         setSales(salesArray);
       }
     } catch (error) {
@@ -54,7 +55,7 @@ const Dashboard = () => {
     }
   };
 
-  const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalRevenue = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
   const lowStockProducts = products.filter((p) => p.stock <= p.minStock);
   const pendingSales = sales.filter((s) => s.status === "pending");
 

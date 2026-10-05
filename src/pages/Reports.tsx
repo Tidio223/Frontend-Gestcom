@@ -18,20 +18,37 @@ const Reports = () => {
   const [viewingReport, setViewingReport] = useState<any>(null);
   const [currentReportType, setCurrentReportType] = useState<string>("");
   const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [sales, setSales] = useState<any[]>([]);
+  const token = localStorage.getItem('token');
 
-  // Charger les rapports sauvegardés depuis localStorage au démarrage
+  // Charger les factures et ventes depuis l'API
   useEffect(() => {
-    // Nettoyer les anciens rapports au démarrage
-    localStorage.removeItem('savedReports');
-    setSavedReports([]);
-  }, []);
-
-  // Sauvegarder les rapports dans localStorage quand ils changent
-  useEffect(() => {
-    if (savedReports.length > 0) {
-      localStorage.setItem('savedReports', JSON.stringify(savedReports));
-    }
-  }, [savedReports]);
+    const fetchData = async () => {
+      try {
+        const invoicesRes = await fetch(`${API_BASE_URL}/api/invoices`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const invoicesData = await invoicesRes.json();
+        
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const salesData = await salesRes.json();
+        
+        if (invoicesData.success) {
+          setInvoices(invoicesData.data);
+        }
+        if (salesData.success) {
+          setSales(salesData.data);
+        }
+      } catch (error) {
+        console.error('Erreur chargement données:', error);
+      }
+    };
+    
+    fetchData();
+  }, [token]);
 
   // Régénérer le rapport quand la période ou le type change
   useEffect(() => {
@@ -66,9 +83,7 @@ const Reports = () => {
 
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-    // Récupérer les factures payées depuis localStorage pour le rapport de ventes
-    const invoicesData = localStorage.getItem('invoices');
-    const invoices = invoicesData ? JSON.parse(invoicesData) : [];
+    // Utiliser les factures chargées depuis l'API
     const paidInvoices = invoices.filter((inv: any) => inv.status === 'paid');
     
     // Filtrer les factures selon la période
@@ -76,15 +91,12 @@ const Reports = () => {
       const invoiceDate = new Date(inv.date);
       const start = new Date(startDate);
       const end = new Date(endDate);
-      // Normaliser les dates pour ignorer l'heure
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
       invoiceDate.setHours(0, 0, 0, 0);
       return invoiceDate >= start && invoiceDate <= end;
     });
 
-    // Si aucune facture n'est trouvée pour la période, utiliser toutes les factures payées
-    // pour le développement (à enlever en production quand on aura des factures récentes)
     const displayInvoices = filteredInvoices.length > 0 ? filteredInvoices : paidInvoices;
 
     switch (type) {
