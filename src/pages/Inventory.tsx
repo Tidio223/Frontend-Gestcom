@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Package, AlertTriangle, TrendingDown, Calendar, Download, Printer, Mail, Eye, Search } from "lucide-react";
 import { products, formatCurrency } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
+import { API_BASE_URL } from "@/config/api";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
