@@ -27,6 +27,8 @@ const Reports = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('Fetching data with token:', token ? 'exists' : 'missing');
+        
         const invoicesRes = await fetch(`${API_BASE_URL}/api/invoices`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -46,17 +48,25 @@ const Reports = () => {
         console.log('Products response:', productsData);
         
         if (invoicesData.success) {
-          console.log('Setting invoices:', invoicesData.data);
-          setInvoices(invoicesData.data);
+          const invoicesArray = invoicesData.data.invoices || invoicesData.data;
+          console.log('Setting invoices:', invoicesArray, 'length:', invoicesArray.length);
+          setInvoices(invoicesArray);
+        } else {
+          console.error('Invoices fetch failed:', invoicesData.message);
         }
         if (salesData.success) {
-          console.log('Setting sales:', salesData.data);
-          setSales(salesData.data);
+          const salesArray = salesData.data.sales || salesData.data;
+          console.log('Setting sales:', salesArray, 'length:', salesArray.length);
+          setSales(salesArray);
+        } else {
+          console.error('Sales fetch failed:', salesData.message);
         }
         if (productsData.success) {
           const productsArray = productsData.data.products || productsData.data;
-          console.log('Setting products:', productsArray);
+          console.log('Setting products:', productsArray, 'length:', productsArray.length);
           setProducts(productsArray);
+        } else {
+          console.error('Products fetch failed:', productsData.message);
         }
       } catch (error) {
         console.error('Erreur chargement données:', error);
