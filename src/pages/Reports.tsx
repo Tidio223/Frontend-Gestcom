@@ -28,22 +28,26 @@ const Reports = () => {
     const fetchData = async () => {
       try {
         console.log('Fetching data with token:', token ? 'exists' : 'missing');
+        console.log('API_BASE_URL:', API_BASE_URL);
         
         const invoicesRes = await fetch(`${API_BASE_URL}/api/invoices`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Invoices status:', invoicesRes.status);
         const invoicesData = await invoicesRes.json();
         console.log('Invoices response:', invoicesData);
         
         const salesRes = await fetch(`${API_BASE_URL}/api/sales?limit=1000`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Sales status:', salesRes.status);
         const salesData = await salesRes.json();
         console.log('Sales response:', salesData);
         
         const productsRes = await fetch(`${API_BASE_URL}/api/products?limit=1000`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('Products status:', productsRes.status);
         const productsData = await productsRes.json();
         console.log('Products response:', productsData);
         
