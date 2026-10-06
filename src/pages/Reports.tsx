@@ -35,13 +35,13 @@ const Reports = () => {
         const invoicesData = await invoicesRes.json();
         console.log('Invoices response:', invoicesData);
         
-        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
+        const salesRes = await fetch(`${API_BASE_URL}/api/sales?limit=1000`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const salesData = await salesRes.json();
         console.log('Sales response:', salesData);
         
-        const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
+        const productsRes = await fetch(`${API_BASE_URL}/api/products?limit=1000`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const productsData = await productsRes.json();
