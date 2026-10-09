@@ -134,10 +134,12 @@ const Invoices = () => {
 
   const markAsPaid = async (invoice: Invoice) => {
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, {
         method: 'PUT',
-        ...getFetchOptions(),
+        ...options,
         headers: {
+          ...(options.headers as Record<string, string>),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ status: 'paid' }),

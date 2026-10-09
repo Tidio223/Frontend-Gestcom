@@ -67,10 +67,11 @@ const Auth = () => {
     }
     setResetSubmitting(true);
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
         method: 'POST',
-        ...getFetchOptions(),
-        headers: { 'Content-Type': 'application/json' },
+        ...options,
+        headers: { ...(options.headers as Record<string, string>), 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail }),
       });
       const data = await response.json();
@@ -106,10 +107,11 @@ const Auth = () => {
     }
     setResetSubmitting(true);
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
         method: 'POST',
-        ...getFetchOptions(),
-        headers: { 'Content-Type': 'application/json' },
+        ...options,
+        headers: { ...(options.headers as Record<string, string>), 'Content-Type': 'application/json' },
         body: JSON.stringify({ resetToken, newPassword }),
       });
       const data = await response.json();

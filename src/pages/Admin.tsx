@@ -186,12 +186,14 @@ const Admin = () => {
   const callAdmin = async (action: string, data: Record<string, unknown>) => {
     try {
       let response;
+      const options = getFetchOptions();
       switch (action) {
         case "create":
           response = await fetch(`${API_BASE_URL}/api/auth/register`, {
             method: "POST",
-            ...getFetchOptions(),
+            ...options,
             headers: {
+              ...(options.headers as Record<string, string>),
               "Content-Type": "application/json",
             },
             body: JSON.stringify(data),
@@ -200,14 +202,15 @@ const Admin = () => {
         case "delete":
           response = await fetch(`${API_BASE_URL}/api/users/${data.user_id}`, {
             method: "DELETE",
-            ...getFetchOptions(),
+            ...options,
           });
           break;
         case "set_role":
           response = await fetch(`${API_BASE_URL}/api/users/${data.user_id}/role`, {
             method: "PUT",
-            ...getFetchOptions(),
+            ...options,
             headers: {
+              ...(options.headers as Record<string, string>),
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ role: data.role }),

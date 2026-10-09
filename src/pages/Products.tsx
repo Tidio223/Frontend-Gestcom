@@ -6,11 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { products as initialProducts, Product, formatCurrency } from "@/data/mock-data";
+import { Product, formatCurrency } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { COMPANY_INFO } from "@/config/company";
+import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
+import { useNavigate } from "react-router-dom";
 import "@/styles/print.css";
 
 interface StockMovement {
@@ -26,7 +29,8 @@ interface StockMovement {
 }
 
 const Products = () => {
-  const [productList, setProductList] = useState<Product[]>(initialProducts);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -41,12 +45,12 @@ const Products = () => {
   const [stockManagementReason, setStockManagementReason] = useState("");
   const [stockManagementProductId, setStockManagementProductId] = useState("");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
-  // Charger les produits et les mouvements de stock depuis localStorage au démarrage
+  // Charger les produits et les mouvements de stock depuis l'API
   useEffect(() => {
-    // Nettoyer les anciennes données mock au démarrage
-    localStorage.removeItem('products');
-    
     const fetchProducts = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/products`, {
@@ -55,7 +59,6 @@ const Products = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('Produits API:', data);
-          // Transformer les données de l'API pour correspondre à l'interface Product
           const productsArray = data.data.products || data.data;
           const transformedProducts = productsArray.map((p: any) => ({
             id: p._id,
@@ -66,33 +69,58 @@ const Products = () => {
             prixDetail: p.prixDetail || p.price || 0,
             stock: p.stock,
             minStock: p.minStock,
-            unit: p.unit || 'unité', // Utiliser l'unité de l'API ou 'unité' par défaut
+            unit: p.unit || 'unité',
           }));
           setProductList(transformedProducts);
+        } else if (response.status === 401) {
+          toast({ title: "Session expirée", description: "Reconnectez-vous", variant: "destructive" });
+          localStorage.removeItem('token');
+          navigate('/auth');
         } else {
-          // Fallback vers localStorage si l'API échoue
-          const savedProducts = localStorage.getItem('products');
-          if (savedProducts) {
-            setProductList(JSON.parse(savedProducts));
-          }
+          const error = await response.json();
+          toast({ title: "Erreur", description: error.message || "Impossible de charger les produits", variant: "destructive" });
         }
       } catch (error) {
         console.error('Error fetching products:', error);
-        // Fallback vers localStorage en cas d'erreur
-        const savedProducts = localStorage.getItem('products');
-        if (savedProducts) {
-          setProductList(JSON.parse(savedProducts));
-        }
+        toast({ title: "Erreur", description: "Impossible de charger les produits", variant: "destructive" });
+      } finally {
+        setLoading(false);
       }
     };
-    fetchProducts();
 
-    // Charger les mouvements de stock depuis localStorage
-    const savedMovements = localStorage.getItem('stockMovements');
-    if (savedMovements) {
-      setMovements(JSON.parse(savedMovements));
-    }
-  }, []);
+    const fetchMovements = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/stockmovements`, {
+          ...getFetchOptions(),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const movementsArray = data.data || [];
+          const transformedMovements = movementsArray.map((m: any) => ({
+            id: m._id,
+            productId: m.productId?._id || m.productId,
+            productName: m.productName,
+            type: m.type,
+            quantity: m.quantity,
+            previousStock: m.previousStock,
+            newStock: m.newStock,
+            reason: m.reason,
+            date: m.createdAt,
+          }));
+          setMovements(transformedMovements);
+        } else if (response.status === 401) {
+          toast({ title: "Session expirée", description: "Reconnectez-vous", variant: "destructive" });
+          localStorage.removeItem('token');
+          navigate('/auth');
+        }
+      } catch (error) {
+        console.error('Error fetching movements:', error);
+      }
+    };
+
+    fetchProducts();
+    fetchMovements();
+  }, [navigate, toast]);
 
   const filtered = productList.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase())
@@ -103,10 +131,12 @@ const Products = () => {
     const fd = new FormData(e.currentTarget);
 
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/products`, {
         method: 'POST',
-        ...getFetchOptions(),
+        ...options,
         headers: {
+          ...(options.headers as Record<string, string>),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -114,7 +144,7 @@ const Products = () => {
           category: fd.get("category"),
           prixGros: Number(fd.get("prixGros")),
           prixDetail: Number(fd.get("prixDetail")),
-          price: Number(fd.get("prixDetail")), // Utiliser prixDetail comme prix principal pour compatibilité
+          price: Number(fd.get("prixDetail")),
           stock: Number(fd.get("stock")),
           minStock: Number(fd.get("minStock")),
           unit: fd.get("unit"),
@@ -136,30 +166,19 @@ const Products = () => {
         };
         const updatedList = [newProduct, ...productList];
         setProductList(updatedList);
-        localStorage.setItem('products', JSON.stringify(updatedList));
         setOpen(false);
         toast({ title: "Produit ajouté", description: `${newProduct.name} a été ajouté au stock.` });
+      } else if (response.status === 401) {
+        toast({ title: "Session expirée", description: "Reconnectez-vous", variant: "destructive" });
+        localStorage.removeItem('token');
+        navigate('/auth');
       } else {
         const error = await response.json();
         toast({ title: "Erreur", description: error.message || "Impossible d'ajouter le produit", variant: "destructive" });
       }
     } catch (error) {
       console.error('Error adding product:', error);
-      // Fallback vers localStorage si l'API échoue
-      const newProduct: Product = {
-        id: String(Date.now()),
-        name: fd.get("name") as string,
-        category: fd.get("category") as string,
-        price: Number(fd.get("price")),
-        stock: Number(fd.get("stock")),
-        minStock: Number(fd.get("minStock")),
-        unit: fd.get("unit") as string,
-      };
-      const updatedList = [newProduct, ...productList];
-      setProductList(updatedList);
-      localStorage.setItem('products', JSON.stringify(updatedList));
-      setOpen(false);
-      toast({ title: "Produit ajouté (local)", description: `${newProduct.name} a été ajouté localement.` });
+      toast({ title: "Erreur", description: "Impossible d'ajouter le produit", variant: "destructive" });
     }
   };
 
@@ -169,10 +188,12 @@ const Products = () => {
     const fd = new FormData(e.currentTarget);
 
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/products/${selectedProduct.id}`, {
         method: 'PUT',
-        ...getFetchOptions(),
+        ...options,
         headers: {
+          ...(options.headers as Record<string, string>),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -202,45 +223,52 @@ const Products = () => {
         };
         const updatedList = productList.map((p) => (p.id === selectedProduct.id ? updatedProduct : p));
         setProductList(updatedList);
-        localStorage.setItem('products', JSON.stringify(updatedList));
         setEditOpen(false);
         setSelectedProduct(null);
         toast({ title: "Produit modifié", description: `${updatedProduct.name} a été mis à jour.` });
+      } else if (response.status === 401) {
+        toast({ title: "Session expirée", description: "Reconnectez-vous", variant: "destructive" });
+        localStorage.removeItem('token');
+        navigate('/auth');
       } else {
         const error = await response.json();
         toast({ title: "Erreur", description: error.message || "Impossible de modifier le produit", variant: "destructive" });
       }
     } catch (error) {
       console.error('Error updating product:', error);
-      // Fallback vers localStorage si l'API échoue
-      const updatedProduct: Product = {
-        ...selectedProduct,
-        name: fd.get("name") as string,
-        category: fd.get("category") as string,
-        price: Number(fd.get("prixDetail")),
-        prixGros: Number(fd.get("prixGros")),
-        prixDetail: Number(fd.get("prixDetail")),
-        stock: Number(fd.get("stock")),
-        minStock: Number(fd.get("minStock")),
-        unit: fd.get("unit") as string,
-      };
-      const updatedList = productList.map((p) => (p.id === selectedProduct.id ? updatedProduct : p));
-      setProductList(updatedList);
-      localStorage.setItem('products', JSON.stringify(updatedList));
-      setEditOpen(false);
-      setSelectedProduct(null);
-      toast({ title: "Produit modifié (local)", description: `${updatedProduct.name} a été modifié localement.` });
+      toast({ title: "Erreur", description: "Impossible de modifier le produit", variant: "destructive" });
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selectedProduct) return;
-    const updatedList = productList.filter((p) => p.id !== selectedProduct.id);
-    setProductList(updatedList);
-    localStorage.setItem('products', JSON.stringify(updatedList));
-    setDeleteOpen(false);
-    setSelectedProduct(null);
-    toast({ title: "Produit supprimé", description: `${selectedProduct.name} a été supprimé du stock.` });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/products/${selectedProduct.id}`, {
+        method: 'DELETE',
+        ...getFetchOptions(),
+      });
+
+      if (response.ok) {
+        const updatedList = productList.filter((p) => p.id !== selectedProduct.id);
+        setProductList(updatedList);
+        setDeleteOpen(false);
+        setSelectedProduct(null);
+        toast({ title: "Produit supprimé", description: `${selectedProduct.name} a été supprimé du stock.` });
+      } else if (response.status === 401) {
+        toast({ title: "Session expirée", description: "Reconnectez-vous", variant: "destructive" });
+        localStorage.removeItem('token');
+        navigate('/auth');
+      } else if (response.status === 403) {
+        toast({ title: "Accès refusé", description: "Seul le super administrateur peut supprimer des produits", variant: "destructive" });
+      } else {
+        const error = await response.json();
+        toast({ title: "Erreur", description: error.message || "Impossible de supprimer le produit", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({ title: "Erreur", description: "Impossible de supprimer le produit", variant: "destructive" });
+    }
   };
 
   const openEditDialog = (product: Product) => {
@@ -388,63 +416,87 @@ const Products = () => {
     };
   };
 
-  const handleStockMovement = (e: React.FormEvent) => {
+  const handleStockMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stockManagementProductId) {
       toast({ title: "Erreur", description: "Veuillez sélectionner un produit", variant: "destructive" });
       return;
     }
 
-    const product = productList.find(p => p.id === stockManagementProductId);
-    if (!product) {
-      toast({ title: "Erreur", description: "Produit non trouvé", variant: "destructive" });
-      return;
+    try {
+      const options = getFetchOptions();
+      const response = await fetch(`${API_BASE_URL}/api/stockmovements`, {
+        method: 'POST',
+        ...options,
+        headers: {
+          ...(options.headers as Record<string, string>),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          productId: stockManagementProductId,
+          type: stockManagementType,
+          quantity: stockManagementQuantity,
+          reason: stockManagementReason,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const movement = data.data;
+        
+        // Mettre à jour le produit dans la liste locale
+        const updatedList = productList.map((p) => 
+          p.id === stockManagementProductId ? { ...p, stock: movement.newStock } : p
+        );
+        setProductList(updatedList);
+
+        // Ajouter le mouvement à la liste locale
+        const newMovement: StockMovement = {
+          id: movement._id,
+          productId: movement.product._id || movement.product,
+          productName: movement.product.name,
+          type: movement.type,
+          quantity: movement.quantity,
+          previousStock: movement.previousStock,
+          newStock: movement.newStock,
+          reason: movement.reason,
+          date: movement.createdAt,
+        };
+        const updatedMovements = [newMovement, ...movements];
+        setMovements(updatedMovements);
+
+        setStockManagementOpen(false);
+        setStockManagementQuantity(1);
+        setStockManagementReason('');
+        setStockManagementProductId('');
+        toast({ 
+          title: "Mouvement enregistré", 
+          description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités` 
+        });
+      } else if (response.status === 401) {
+        toast({ title: "Session expirée", description: "Reconnectez-vous", variant: "destructive" });
+        localStorage.removeItem('token');
+        navigate('/auth');
+      } else {
+        const error = await response.json();
+        toast({ title: "Erreur", description: error.message || "Impossible d'enregistrer le mouvement", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error creating stock movement:', error);
+      toast({ title: "Erreur", description: "Impossible d'enregistrer le mouvement", variant: "destructive" });
     }
-
-    const previousStock = product.stock;
-    const newStock = stockManagementType === 'entry' 
-      ? previousStock + stockManagementQuantity 
-      : previousStock - stockManagementQuantity;
-
-    if (newStock < 0) {
-      toast({ title: "Erreur", description: "Stock insuffisant pour cette sortie", variant: "destructive" });
-      return;
-    }
-
-    // Créer le mouvement de stock
-    const newMovement: StockMovement = {
-      id: String(Date.now()),
-      productId: stockManagementProductId,
-      productName: product.name,
-      type: stockManagementType,
-      quantity: stockManagementQuantity,
-      previousStock,
-      newStock,
-      reason: stockManagementReason,
-      date: new Date().toISOString(),
-    };
-
-    // Mettre à jour le produit
-    const updatedList = productList.map((p) => 
-      p.id === stockManagementProductId ? { ...p, stock: newStock } : p
-    );
-    setProductList(updatedList);
-    localStorage.setItem('products', JSON.stringify(updatedList));
-
-    // Sauvegarder le mouvement
-    const updatedMovements = [newMovement, ...movements];
-    setMovements(updatedMovements);
-    localStorage.setItem('stockMovements', JSON.stringify(updatedMovements));
-
-    setStockManagementOpen(false);
-    setStockManagementQuantity(1);
-    setStockManagementReason('');
-    setStockManagementProductId('');
-    toast({ 
-      title: "Mouvement enregistré", 
-      description: `${stockManagementType === 'entry' ? 'Entrée' : 'Sortie'} de ${stockManagementQuantity} unités pour ${product.name}` 
-    });
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-3xl font-bold text-foreground">Produits & Stock</h1>
+          <p className="mt-1 text-muted-foreground">Chargement des produits...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -650,14 +702,16 @@ const Products = () => {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDeleteDialog(p)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive/80"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {isSuperAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDeleteDialog(p)}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive/80"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

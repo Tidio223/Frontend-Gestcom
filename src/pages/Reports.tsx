@@ -53,10 +53,12 @@ const Reports = () => {
   // Régénérer les rapports
   const handleRegenerate = async () => {
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/reports/regenerate`, {
         method: 'POST',
-        ...getFetchOptions(),
+        ...options,
         headers: {
+          ...(options.headers as Record<string, string>),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ types: ['sales', 'inventory', 'customers'], period: dateRange }),

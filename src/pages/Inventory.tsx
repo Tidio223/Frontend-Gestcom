@@ -70,10 +70,12 @@ const Inventory = () => {
   // Régénérer les inventaires
   const handleRegenerate = async () => {
     try {
+      const options = getFetchOptions();
       const response = await fetch(`${API_BASE_URL}/api/inventories/regenerate`, {
         method: 'POST',
-        ...getFetchOptions(),
+        ...options,
         headers: {
+          ...(options.headers as Record<string, string>),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ types: ['daily', 'weekly', 'monthly'] }),

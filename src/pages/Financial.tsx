@@ -142,11 +142,13 @@ const Financial = () => {
         : `${API_BASE_URL}/api/financial/transactions`;
 
       const method = editingTransaction ? "PUT" : "POST";
+      const options = getFetchOptions();
 
       const response = await fetch(url, {
         method,
-        ...getFetchOptions(),
+        ...options,
         headers: {
+          ...(options.headers as Record<string, string>),
           "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
