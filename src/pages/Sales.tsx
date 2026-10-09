@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 
 interface SaleItem {
   productId: string;
@@ -63,16 +63,9 @@ const Sales = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          console.error('Token manquant');
-          setLoading(false);
-          return;
-        }
-
         // Charger les produits
         const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
-          headers: { Authorization: `Bearer ${token}` },
+          ...getFetchOptions(),
         });
         const productsData = await productsRes.json();
         console.log('Produits chargés:', productsData);
@@ -84,7 +77,7 @@ const Sales = () => {
 
         // Charger les ventes
         const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-          headers: { Authorization: `Bearer ${token}` },
+          ...getFetchOptions(),
         });
         const salesData = await salesRes.json();
         if (salesData.success) {
@@ -93,7 +86,7 @@ const Sales = () => {
 
         // Charger les statistiques
         const statsRes = await fetch(`${API_BASE_URL}/api/sales/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
+          ...getFetchOptions(),
         });
         const statsData = await statsRes.json();
         if (statsData.success) {
@@ -173,20 +166,27 @@ const Sales = () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
-    if (!customer || items.length === 0) {
-      toast({ title: "Erreur", description: "Veuillez remplir tous les champs", variant: "destructive" });
+    const payload = { customer: customer || 'Client anonyme', items, typeVente };
+    console.log('Payload envoyé au serveur:', JSON.stringify(payload, null, 2));
+
+    // Filtrer les items sans produit sélectionné
+    const validItems = items.filter(item => item.productId && item.quantity > 0);
+
+    if (validItems.length === 0) {
+      toast({ title: "Erreur", description: "Veuillez ajouter au moins un article", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
 
+    // Utiliser les items validés
+    const finalPayload = { ...payload, items: validItems };
+    console.log('Payload final après filtrage:', JSON.stringify(finalPayload, null, 2));
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/sales`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ customer, items, typeVente }),
+        ...getFetchOptions(),
+        body: JSON.stringify(finalPayload),
       });
 
       const data = await response.json();
@@ -197,10 +197,14 @@ const Sales = () => {
         setItems([]);
         setCustomer("");
         setCreateOpen(false);
-        
-        toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer}` });
+
+        toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer || 'Client anonyme'}` });
       } else {
-        toast({ title: "Erreur", description: data.message || "Erreur lors de la création de la vente", variant: "destructive" });
+        console.error('Erreur création vente:', response.status, JSON.stringify(data, null, 2));
+        const errorMessage = data.errors
+          ? data.errors.map((e: any) => `${e.path}: ${e.msg}`).join(', ')
+          : data.message || "Erreur lors de la création de la vente";
+        toast({ title: "Erreur", description: errorMessage, variant: "destructive" });
       }
     } catch (error) {
       toast({ title: "Erreur", description: "Erreur de réseau", variant: "destructive" });
@@ -244,13 +248,12 @@ const Sales = () => {
             </DialogHeader>
             <form onSubmit={handleCreateSale} className="space-y-4">
             <div>
-              <Label htmlFor="customer">Client</Label>
+              <Label htmlFor="customer">Client (optionnel)</Label>
               <Input
                 id="customer"
                 value={customer}
                 onChange={(e) => setCustomer(e.target.value)}
                 placeholder="Nom du client"
-                required
               />
             </div>
               <div>
@@ -324,7 +327,7 @@ const Sales = () => {
                   </div>
                 )}
               </div>
-              <Button type="submit" className="w-full" disabled={items.length === 0 || !customer || isSubmitting}>
+              <Button type="submit" className="w-full" disabled={items.length === 0 || isSubmitting}>
                 {isSubmitting ? 'Création en cours...' : 'Créer la vente et générer la facture'}
               </Button>
             </form>

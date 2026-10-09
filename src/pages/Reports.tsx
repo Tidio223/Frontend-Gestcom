@@ -5,92 +5,84 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Eye, FileText } from "lucide-react";
-import { Download, TrendingUp, DollarSign, Users, Package, Printer } from "lucide-react";
+import { Download, TrendingUp, DollarSign, Users, Package, Printer, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { COMPANY_INFO } from "@/config/company";
+import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
 import "@/styles/print.css";
 
 const Reports = () => {
+  const { user } = useAuth();
   const [selectedReport, setSelectedReport] = useState<string>("");
   const [dateRange, setDateRange] = useState<string>("month");
   const [viewingReport, setViewingReport] = useState<any>(null);
   const [currentReportType, setCurrentReportType] = useState<string>("");
   const [savedReports, setSavedReports] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [sales, setSales] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const token = localStorage.getItem('token');
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
-  // Charger les factures, ventes et produits depuis l'API
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        console.log('Fetching data with token:', token ? 'exists' : 'missing');
-        console.log('API_BASE_URL:', API_BASE_URL);
-        
-        const invoicesRes = await fetch(`${API_BASE_URL}/api/invoices`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        console.log('Invoices status:', invoicesRes.status);
-        const invoicesData = await invoicesRes.json();
-        console.log('Invoices response:', invoicesData);
-        
-        const salesRes = await fetch(`${API_BASE_URL}/api/sales?limit=1000`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        console.log('Sales status:', salesRes.status);
-        const salesData = await salesRes.json();
-        console.log('Sales response:', salesData);
-        
-        const productsRes = await fetch(`${API_BASE_URL}/api/products?limit=1000`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        console.log('Products status:', productsRes.status);
-        const productsData = await productsRes.json();
-        console.log('Products response:', productsData);
-        
-        if (invoicesData.success) {
-          const invoicesArray = invoicesData.data.invoices || invoicesData.data;
-          console.log('Setting invoices:', invoicesArray, 'length:', invoicesArray.length);
-          setInvoices(invoicesArray);
-        } else {
-          console.error('Invoices fetch failed:', invoicesData.message);
-        }
-        if (salesData.success) {
-          const salesArray = salesData.data.sales || salesData.data;
-          console.log('Setting sales:', salesArray, 'length:', salesArray.length);
-          setSales(salesArray);
-        } else {
-          console.error('Sales fetch failed:', salesData.message);
-        }
-        if (productsData.success) {
-          const productsArray = productsData.data.products || productsData.data;
-          console.log('Setting products:', productsArray, 'length:', productsArray.length);
-          setProducts(productsArray);
-        } else {
-          console.error('Products fetch failed:', productsData.message);
-        }
-      } catch (error) {
-        console.error('Erreur chargement données:', error);
+  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
+
+  // Charger les rapports depuis l'API
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reports`, {
+        ...getFetchOptions(),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setSavedReports(data.data);
       }
-    };
-    
-    fetchData();
-  }, [token]);
-
-  // Régénérer le rapport quand la période ou le type change
-  useEffect(() => {
-    if (currentReportType) {
-      console.log('Generating report for type:', currentReportType, 'with sales:', sales.length, 'products:', products.length);
-      const reportData = generateReportData(currentReportType, dateRange);
-      console.log('Generated report data:', reportData);
-      setViewingReport(reportData);
+    } catch (error) {
+      console.error('Erreur chargement rapports:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [dateRange, currentReportType, sales, products]);
+  };
 
-  const generateReportData = (type: string, period: string = "month", financialData?: any) => {
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  // Régénérer les rapports
+  const handleRegenerate = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reports/regenerate`, {
+        method: 'POST',
+        ...getFetchOptions(),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ types: ['sales', 'inventory', 'customers'], period: dateRange }),
+      });
+
+      if (response.ok) {
+        toast({ title: "Succès", description: "Rapports régénérés avec succès" });
+        fetchReports();
+      } else {
+        toast({ title: "Erreur", description: "Impossible de régénérer les rapports", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error regenerating reports:', error);
+      toast({ title: "Erreur", description: "Erreur lors de la régénération", variant: "destructive" });
+    }
+  };
+
+  const generateReportData = (type: string, period: string = "month") => {
+    // Utiliser les rapports existants depuis l'API
+    const report = savedReports.find(r => r.type === type && r.period === period);
+    
+    if (report) {
+      return report;
+    }
+
+    // Fallback : générer localement si aucun rapport trouvé
     const now = new Date();
     let startDate: Date;
     let endDate: Date = now;
@@ -115,122 +107,45 @@ const Reports = () => {
 
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
-    // Utiliser les ventes directement pour les rapports (plus fiable que les factures)
-    const allSales = sales;
-    
-    // Filtrer les ventes selon la période
-    const filteredSales = allSales.filter((sale: any) => {
-      const saleDate = new Date(sale.createdAt);
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-      saleDate.setHours(0, 0, 0, 0);
-      return saleDate >= start && saleDate <= end;
-    });
-
-    // Utiliser les ventes filtrées, ou toutes si aucune n'est trouvée dans la période
-    const displaySales = filteredSales.length > 0 ? filteredSales : allSales;
-
-    switch (type) {
-      case "sales":
-        return {
-          title: `Rapport de Ventes - ${period === "day" ? "Jour" : period === "week" ? "Semaine" : period === "month" ? "Mois" : "Année"}`,
-          period: period,
-          startDate: formatDate(startDate),
-          endDate: formatDate(endDate),
-          data: displaySales.length > 0 ? displaySales.map((sale: any) => ({
-            date: new Date(sale.createdAt).toLocaleDateString('fr-FR'),
-            product: sale.items.map((item: any) => item.productName).join(', '),
-            quantity: sale.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
-            amount: `${sale.total.toLocaleString('fr-FR')} FCFA`,
-            customer: sale.customer
-          })) : [],
-          summary: displaySales.length > 0 ? {
-            totalSales: `${displaySales.reduce((sum: number, sale: any) => sum + sale.total, 0).toLocaleString('fr-FR')} FCFA`,
-            totalProducts: displaySales.reduce((sum: number, sale: any) => sum + sale.items.reduce((s: number, item: any) => s + item.quantity, 0), 0),
-            totalCustomers: displaySales.length,
-            averageSale: displaySales.length > 0 ? `${Math.round(displaySales.reduce((sum: number, sale: any) => sum + sale.total, 0) / displaySales.length).toLocaleString('fr-FR')} FCFA` : "0 FCFA"
-          } : {
-            totalSales: "0 FCFA",
-            totalProducts: 0,
-            totalCustomers: 0,
-            averageSale: "0 FCFA"
-          }
-        };
-      case "inventory":
-        return {
-          title: `Rapport d'Inventaire - ${period === "day" ? "Jour" : period === "week" ? "Semaine" : period === "month" ? "Mois" : "Année"}`,
-          period: period,
-          startDate: formatDate(startDate),
-          endDate: formatDate(endDate),
-          data: products.map((p: any) => ({
-            product: p.name,
-            stock: p.stock,
-            reserved: 0,
-            available: p.stock,
-            status: p.stock <= p.minStock ? "Stock faible" : "En stock"
-          })),
-          summary: {
-            totalProducts: products.length,
-            totalStock: products.reduce((sum: number, p: any) => sum + p.stock, 0),
-            totalReserved: 0,
-            totalAvailable: products.reduce((sum: number, p: any) => sum + p.stock, 0)
-          }
-        };
-      case "customers":
-        return {
-          title: `Rapport Clients - ${period === "day" ? "Jour" : period === "week" ? "Semaine" : period === "month" ? "Mois" : "Année"}`,
-          period: period,
-          startDate: formatDate(startDate),
-          endDate: formatDate(endDate),
-          data: [
-            { name: "Entreprise A", email: "contact@entreprise-a.com", phone: "+221 33 123 45 67", orders: period === "day" ? 2 : period === "week" ? 15 : period === "month" ? 15 : 180, totalSpent: period === "day" ? "3,400 FCFA" : period === "week" ? "25,450 FCFA" : period === "month" ? "25,450 FCFA" : "305,400 FCFA" },
-            { name: "Entreprise B", email: "info@entreprise-b.com", phone: "+221 33 234 56 78", orders: period === "day" ? 1 : period === "week" ? 8 : period === "month" ? 8 : 96, totalSpent: period === "day" ? "1,540 FCFA" : period === "week" ? "12,300 FCFA" : period === "month" ? "12,300 FCFA" : "147,600 FCFA" },
-            { name: "Entreprise C", email: "hello@entreprise-c.com", phone: "+221 33 345 67 89", orders: period === "day" ? 0 : period === "week" ? 12 : period === "month" ? 12 : 144, totalSpent: period === "day" ? "0 FCFA" : period === "week" ? "18,750 FCFA" : period === "month" ? "18,750 FCFA" : "225,000 FCFA" },
-            { name: "Entreprise D", email: "service@entreprise-d.com", phone: "+221 33 456 78 90", orders: period === "day" ? 1 : period === "week" ? 6 : period === "month" ? 6 : 72, totalSpent: period === "day" ? "1,530 FCFA" : period === "week" ? "9,200 FCFA" : period === "month" ? "9,200 FCFA" : "110,400 FCFA" },
-            { name: "Entreprise E", email: "contact@entreprise-e.com", phone: "+221 33 567 89 01", orders: period === "day" ? 3 : period === "week" ? 20 : period === "month" ? 20 : 240, totalSpent: period === "day" ? "5,340 FCFA" : period === "week" ? "35,600 FCFA" : period === "month" ? "35,600 FCFA" : "427,200 FCFA" },
-          ],
-          summary: {
-            totalCustomers: 5,
-            totalOrders: period === "day" ? 7 : period === "week" ? 61 : period === "month" ? 61 : 732,
-            totalRevenue: period === "day" ? "11,810 FCFA" : period === "week" ? "101,300 FCFA" : period === "month" ? "101,300 FCFA" : "1,215,600 FCFA",
-            averageOrders: period === "day" ? 1.4 : period === "week" ? 12.2 : period === "month" ? 12.2 : 146.4
-          }
-        };
-      default:
-        return { title: "Rapport", data: [], summary: {} };
-    }
+    return {
+      title: `Rapport ${type} - ${period}`,
+      period: period,
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate),
+      data: [],
+      summary: {
+        totalSales: 0,
+        totalProducts: 0,
+        totalCustomers: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0
+      }
+    };
   };
 
   const handleViewReport = (reportType: string) => {
     const reportData = generateReportData(reportType, dateRange);
     setViewingReport(reportData);
     setCurrentReportType(reportType);
-    // Sauvegarder le rapport généré
-    const newReport = {
-      id: `${reportType}-${Date.now()}`,
-      type: reportType,
-      date: new Date().toISOString().split('T')[0],
-      period: dateRange,
-      title: reportData.title,
-      data: reportData
-    };
-    setSavedReports(prev => {
-      const exists = prev.find(r => r.id === newReport.id);
-      if (!exists) {
-        return [...prev, newReport];
-      }
-      return prev;
-    });
-    // Scroll vers le bas de la page pour voir le rapport
-    setTimeout(() => {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    }, 100);
   };
 
-  const handleDeleteReport = (reportId: string) => {
-    setSavedReports(prev => prev.filter(r => r.id !== reportId));
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reports/${reportId}`, {
+        method: 'DELETE',
+        ...getFetchOptions(),
+      });
+
+      if (response.ok) {
+        toast({ title: "Succès", description: "Rapport supprimé avec succès" });
+        fetchReports();
+      } else {
+        toast({ title: "Erreur", description: "Impossible de supprimer le rapport", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast({ title: "Erreur", description: "Erreur lors de la suppression", variant: "destructive" });
+    }
   };
 
   const handleDownloadReport = (reportType: string, format: string) => {
@@ -290,8 +205,13 @@ const Reports = () => {
       phone: "Téléphone",
       orders: "Commandes",
       totalSpent: "Total Dépensé",
-      totalRevenue: "Revenu Total",
-      averageOrders: "Commandes Moyennes"
+      totalRevenue: "Chiffre d'affaires",
+      averageOrders: "Commandes Moyennes",
+      totalSales: "Total ventes",
+      totalProducts: "Quantité totale vendue",
+      totalCustomers: "Clients",
+      averageOrderValue: "Panier moyen",
+      topProducts: "Produits les plus vendus"
     };
     
     const headers = Object.keys(reportData.data[0]).map(key => headerMap[key] || key).join(",");
@@ -311,12 +231,20 @@ const Reports = () => {
     // Ajouter un résumé au début
     let content = `${reportData.title}\n`;
     content += `Généré le: ${new Date().toLocaleDateString('fr-FR')}\n\n`;
-    
+
     if (reportData.summary) {
       content += "RÉSUMÉ\n";
       Object.entries(reportData.summary).forEach(([key, value]) => {
         const frenchKey = headerMap[key] || key;
-        content += `${frenchKey}: ${value}\n`;
+        // Gérer les tableaux (comme topProducts)
+        if (Array.isArray(value)) {
+          content += `${frenchKey}:\n`;
+          value.forEach((item: any, idx: number) => {
+            content += `  ${idx + 1}. ${item.productName || item.name || 'Produit'} - ${item.quantitySold || item.quantity || 0} unités - ${item.revenue || item.total || 0} F CFA\n`;
+          });
+        } else {
+          content += `${frenchKey}: ${value}\n`;
+        }
       });
       content += "\n";
     }
@@ -337,7 +265,16 @@ const Reports = () => {
       content += `RÉSUMÉ:\n`;
       content += `${"-".repeat(20)}\n`;
       Object.entries(reportData.summary).forEach(([key, value]) => {
-        content += `${key}: ${value}\n`;
+        const frenchKey = headerMap[key] || key;
+        // Gérer les tableaux (comme topProducts)
+        if (Array.isArray(value)) {
+          content += `${frenchKey}:\n`;
+          value.forEach((item: any, idx: number) => {
+            content += `  ${idx + 1}. ${item.productName || item.name || 'Produit'} - ${item.quantitySold || item.quantity || 0} unités - ${item.revenue || item.total || 0} F CFA\n`;
+          });
+        } else {
+          content += `${frenchKey}: ${value}\n`;
+        }
       });
       content += "\n";
     }
@@ -541,6 +478,10 @@ const Reports = () => {
               <SelectItem value="year">Cette année</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={handleRegenerate}>
+            <Calendar className="mr-2 h-4 w-4" />
+            Régénérer
+          </Button>
           <Button onClick={() => handleDownloadReport("sales", "csv")}>
             <Download className="mr-2 h-4 w-4" />
             Exporter ventes CSV
@@ -556,7 +497,9 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {savedReports[0]?.data?.summary?.totalSales || "0 FCFA"}
+              {savedReports.length > 0 && savedReports[0]?.summary?.totalRevenue 
+                ? `${savedReports[0].summary.totalRevenue.toLocaleString('fr-FR')} FCFA` 
+                : "0 FCFA"}
             </div>
             <p className="text-xs text-muted-foreground">
               {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
@@ -571,7 +514,7 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {savedReports[0]?.data?.summary?.totalCustomers || 0}
+              {savedReports.length > 0 ? (savedReports[0]?.summary?.totalCustomers || 0) : 0}
             </div>
             <p className="text-xs text-muted-foreground">
               {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
@@ -581,12 +524,12 @@ const Reports = () => {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Produits vendus</CardTitle>
+            <CardTitle className="text-sm font-medium">Quantité totale vendue</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {savedReports[0]?.data?.summary?.totalProducts || 0}
+              {savedReports.length > 0 ? (savedReports[0]?.summary?.totalProducts || 0) : 0}
             </div>
             <p className="text-xs text-muted-foreground">
               {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
@@ -618,17 +561,19 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {savedReports.length === 0 ? (
+              {loading ? (
+                <p className="text-center text-muted-foreground py-8">Chargement...</p>
+              ) : savedReports.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">Aucun rapport sauvegardé</p>
               ) : (
                 savedReports.map((report) => (
-                  <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div key={report._id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
                         <p className="font-medium">{report.title}</p>
                       </div>
-                      <p className="text-sm text-muted-foreground">{report.type} • {report.date}</p>
+                      <p className="text-sm text-muted-foreground">{report.type} • {new Date(report.date).toLocaleDateString('fr-FR')}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Badge variant="default">Disponible</Badge>
@@ -636,21 +581,23 @@ const Reports = () => {
                         variant="outline" 
                         size="sm"
                         onClick={() => {
-                          setViewingReport(report.data);
+                          setViewingReport(report);
                           setCurrentReportType(report.type);
                         }}
                       >
                         <Eye className="mr-2 h-3 w-3" />
                         Voir
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleDeleteReport(report.id)}
-                      >
-                        <Download className="mr-1 h-3 w-3" />
-                        Supprimer
-                      </Button>
+                      {isSuperAdmin && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteReport(report._id)}
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          Supprimer
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -668,18 +615,22 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {savedReports.length === 0 ? (
+              {loading ? (
+                <p className="text-center text-muted-foreground py-8">Chargement...</p>
+              ) : savedReports.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
               ) : (
                 savedReports.slice(0, 4).map((report, index) => (
-                  <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div key={report._id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="space-y-1">
                       <p className="font-medium">{report.title}</p>
-                      <p className="text-sm text-muted-foreground">{report.date}</p>
+                      <p className="text-sm text-muted-foreground">{new Date(report.date).toLocaleDateString('fr-FR')}</p>
                     </div>
                     <div className="flex items-center space-x-4">
                       <span className="font-medium">
-                        {report.data.summary?.totalSales || "0 FCFA"}
+                        {report.summary?.totalRevenue 
+                          ? `${report.summary.totalRevenue.toLocaleString('fr-FR')} FCFA` 
+                          : "0 FCFA"}
                       </span>
                       <Badge variant="default" className="text-green-600">
                         <TrendingUp className="mr-1 h-3 w-3" />
@@ -703,25 +654,25 @@ const Reports = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {savedReports.length === 0 ? (
+            {savedReports.length === 0 || !savedReports[0]?.data?.summary?.topProducts || savedReports[0]?.data?.summary?.topProducts.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
             ) : (
-              savedReports[0]?.data?.data?.slice(0, 5).map((item: any, index: number) => (
+              savedReports[0]?.data?.summary?.topProducts.slice(0, 5).map((item: any, index: number) => (
                 <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-medium text-sm">
                       {index + 1}
                     </div>
                     <div>
-                      <p className="font-medium">{item.product || item.name || 'Produit'}</p>
-                      <p className="text-sm text-muted-foreground">{item.quantity || item.orders || 0} unités vendues</p>
+                      <p className="font-medium">{item.productName || 'Produit'}</p>
+                      <p className="text-sm text-muted-foreground">{item.quantitySold || 0} unités vendues</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <span className="font-medium">{item.amount || item.totalSpent || '0 FCFA'}</span>
+                    <span className="font-medium">{item.revenue?.toLocaleString('fr-FR') || '0'} F CFA</span>
                     <Badge variant="default" className="text-green-600">
                       <TrendingUp className="mr-1 h-3 w-3" />
-                      Disponible
+                      Top produit
                     </Badge>
                   </div>
                 </div>

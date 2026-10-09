@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 
 const schema = z.object({
   email: z.string().trim().email("Email invalide").max(255),
@@ -69,6 +69,7 @@ const Auth = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
         method: 'POST',
+        ...getFetchOptions(),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail }),
       });
@@ -107,6 +108,7 @@ const Auth = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
         method: 'POST',
+        ...getFetchOptions(),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resetToken, newPassword }),
       });

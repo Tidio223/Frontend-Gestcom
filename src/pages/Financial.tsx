@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 
 // Schéma de validation
 const transactionSchema = z.object({
@@ -87,9 +87,6 @@ const Financial = () => {
   const { data: transactionsData, isLoading: loadingTransactions } = useQuery({
     queryKey: ["financial-transactions", currentPage, selectedType, selectedCategory, dateRange, searchTerm],
     queryFn: async () => {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Token non trouvé");
-
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: itemsPerPage.toString(),
@@ -102,7 +99,7 @@ const Financial = () => {
       if (searchTerm) params.append("search", searchTerm);
 
       const response = await fetch(`${API_BASE_URL}/api/financial/transactions?${params}`, {
-        headers: { "Authorization": `Bearer ${token}` },
+        ...getFetchOptions(),
       });
 
       if (!response.ok) throw new Error("Erreur lors de la récupération des transactions");
@@ -114,11 +111,8 @@ const Financial = () => {
   const { data: statsData } = useQuery({
     queryKey: ["financial-stats"],
     queryFn: async () => {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Token non trouvé");
-
       const response = await fetch(`${API_BASE_URL}/api/financial/stats`, {
-        headers: { "Authorization": `Bearer ${token}` },
+        ...getFetchOptions(),
       });
 
       if (!response.ok) throw new Error("Erreur lors de la récupération des statistiques");
@@ -130,11 +124,8 @@ const Financial = () => {
   const { data: usersData } = useQuery({
     queryKey: ["users-for-salaries"],
     queryFn: async () => {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Token non trouvé");
-
       const response = await fetch(`${API_BASE_URL}/api/users`, {
-        headers: { "Authorization": `Bearer ${token}` },
+        ...getFetchOptions(),
       });
 
       if (!response.ok) throw new Error("Erreur lors de la récupération des utilisateurs");
@@ -146,20 +137,17 @@ const Financial = () => {
   // Mutation pour créer/mettre à jour une transaction
   const transactionMutation = useMutation({
     mutationFn: async (data: any) => {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Token non trouvé");
-
-      const url = editingTransaction 
+      const url = editingTransaction
         ? `${API_BASE_URL}/api/financial/transactions/${editingTransaction._id}`
         : `${API_BASE_URL}/api/financial/transactions`;
-      
+
       const method = editingTransaction ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
+        ...getFetchOptions(),
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });
@@ -187,12 +175,9 @@ const Financial = () => {
   // Mutation pour supprimer une transaction
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Token non trouvé");
-
       const response = await fetch(`${API_BASE_URL}/api/financial/transactions/${id}`, {
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` },
+        ...getFetchOptions(),
       });
 
       if (!response.ok) throw new Error("Erreur lors de la suppression");

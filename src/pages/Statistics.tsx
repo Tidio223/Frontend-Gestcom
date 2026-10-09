@@ -3,13 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Package, 
-  ShoppingCart, 
-  Users, 
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Package,
+  ShoppingCart,
+  Users,
   Calendar,
   BarChart3,
   PieChart,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import {
   LineChart,
   Line,
@@ -74,16 +75,8 @@ const Statistics = () => {
   const fetchStatistics = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
       // Récupérer les ventes depuis l'API
-      const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const salesRes = await fetch(`${API_BASE_URL}/api/sales`, getFetchOptions());
       const salesResData = await salesRes.json();
 
       if (salesResData.success) {

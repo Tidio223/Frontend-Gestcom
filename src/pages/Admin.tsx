@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/pagination";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 
 // Emails des comptes protégés (doivent correspondre aux variables d'environnement backend)
 const PROTECTED_EMAILS = [
@@ -157,14 +157,8 @@ const Admin = () => {
   const { data: users = [], isLoading: loadingUsers } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async (): Promise<UserRow[]> => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Token non trouvé");
-      }
       const response = await fetch(`${API_BASE_URL}/api/users`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        ...getFetchOptions(),
       });
       if (!response.ok) {
         throw new Error("Erreur lors de la récupération des utilisateurs");
@@ -178,14 +172,8 @@ const Admin = () => {
   const { data: logs = [], isLoading: loadingLogs } = useQuery({
     queryKey: ["activity-logs"],
     queryFn: async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Token non trouvé");
-      }
       const response = await fetch(`${API_BASE_URL}/api/activity`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        ...getFetchOptions(),
       });
       if (!response.ok) {
         throw new Error("Erreur lors de la récupération des logs d'activité");
@@ -196,16 +184,15 @@ const Admin = () => {
   });
 
   const callAdmin = async (action: string, data: Record<string, unknown>) => {
-    const token = localStorage.getItem("token");
     try {
       let response;
       switch (action) {
         case "create":
           response = await fetch(`${API_BASE_URL}/api/auth/register`, {
             method: "POST",
+            ...getFetchOptions(),
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`,
             },
             body: JSON.stringify(data),
           });
@@ -213,17 +200,15 @@ const Admin = () => {
         case "delete":
           response = await fetch(`${API_BASE_URL}/api/users/${data.user_id}`, {
             method: "DELETE",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-            },
+            ...getFetchOptions(),
           });
           break;
         case "set_role":
           response = await fetch(`${API_BASE_URL}/api/users/${data.user_id}/role`, {
             method: "PUT",
+            ...getFetchOptions(),
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`,
             },
             body: JSON.stringify({ role: data.role }),
           });
@@ -231,17 +216,13 @@ const Admin = () => {
         case "block_user":
           response = await fetch(`${API_BASE_URL}/api/users/${data.user_id}/block`, {
             method: "PATCH",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-            },
+            ...getFetchOptions(),
           });
           break;
         case "unblock_user":
           response = await fetch(`${API_BASE_URL}/api/users/${data.user_id}/unblock`, {
             method: "PATCH",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-            },
+            ...getFetchOptions(),
           });
           break;
         default:

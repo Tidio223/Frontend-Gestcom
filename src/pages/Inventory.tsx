@@ -2,15 +2,15 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, AlertTriangle, TrendingDown, Calendar, Download, Printer, Mail, Eye, Search } from "lucide-react";
-import { products, formatCurrency } from "@/data/mock-data";
+import { Plus, Package, AlertTriangle, TrendingDown, Calendar, Download, Printer, Eye, Search } from "lucide-react";
+import { formatCurrency } from "@/data/mock-data";
 import { useToast } from "@/hooks/use-toast";
-import { API_BASE_URL } from "@/config/api";
+import { useAuth } from "@/hooks/useAuth";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
+import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -33,268 +33,66 @@ interface InventoryItem {
 }
 
 const Inventory = () => {
-  const [reports, setReports] = useState<InventoryReport[]>([]);
-  const [selectedReport, setSelectedReport] = useState<InventoryReport | null>(null);
+  const { user } = useAuth();
+  const [reports, setReports] = useState<any[]>([]);
+  const [selectedReport, setSelectedReport] = useState<any>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Charger les rapports depuis localStorage au démarrage
-  useEffect(() => {
-    // Nettoyer toutes les anciennes données au démarrage
-    localStorage.removeItem('inventoryReports');
-    localStorage.removeItem('savedReports');
-    localStorage.removeItem('invoices');
-    localStorage.removeItem('stockMovements');
-    localStorage.removeItem('products');
-    localStorage.removeItem('sales');
-    setReports([]);
-    // Générer les rapports d'inventaire automatiquement
-    generateDailyInventory();
-    generateWeeklyInventory();
-    generateMonthlyInventory();
-  }, []);
+  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
-  // Sauvegarder les rapports dans localStorage quand ils changent
-  useEffect(() => {
-    if (reports.length > 0) {
-      localStorage.setItem('inventoryReports', JSON.stringify(reports));
-    }
-  }, [reports]);
-
-  const generateDailyInventory = () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0];
-    
-    // Récupérer les ventes réelles depuis l'API
-    const fetchSalesData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const salesData = await salesRes.json();
-
-        if (salesData.success) {
-          const sales = salesData.data.sales || salesData.data;
-          // Filtrer les ventes d'hier
-          const yesterdaySales = sales.filter((sale: any) => {
-            const saleDate = new Date(sale.createdAt).toISOString().split('T')[0];
-            return saleDate === dateStr;
-          });
-
-          if (yesterdaySales.length > 0) {
-            const items = yesterdaySales.flatMap((sale: any) => 
-              sale.items.map((item: any) => ({
-                productId: item.productId,
-                productName: item.productName,
-                quantitySold: item.quantity,
-                unitPrice: item.unitPrice,
-                total: item.total
-              }))
-            );
-
-            const totalSales = items.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0);
-            const totalValue = items.reduce((sum, item) => sum + item.total, 0);
-
-            const dailyReport: InventoryReport = {
-              id: `daily-${dateStr}`,
-              date: dateStr,
-              type: 'daily',
-              period: `Inventaire du ${new Date(dateStr).toLocaleDateString('fr-FR')}`,
-              items,
-              totalSales,
-              totalValue
-            };
-
-            setReports(prev => {
-              const exists = prev.find(r => r.id === dailyReport.id);
-              if (!exists) {
-                return [...prev, dailyReport];
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching sales for inventory:', error);
-      }
-    };
-
-    fetchSalesData();
-  };
-
-  const generateWeeklyInventory = () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const lastMonday = new Date(today);
-    lastMonday.setDate(today.getDate() - dayOfWeek - 7);
-    
-    const dateStr = lastMonday.toISOString().split('T')[0];
-    
-    // Récupérer les ventes réelles depuis l'API
-    const fetchSalesData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const salesData = await salesRes.json();
-
-        if (salesData.success) {
-          const sales = salesData.data.sales || salesData.data;
-          // Filtrer les ventes de la semaine dernière
-          const weekStart = new Date(lastMonday);
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekEnd.getDate() + 7);
-
-          const weeklySales = sales.filter((sale: any) => {
-            const saleDate = new Date(sale.createdAt);
-            return saleDate >= weekStart && saleDate <= weekEnd;
-          });
-
-          if (weeklySales.length > 0) {
-            const items = weeklySales.flatMap((sale: any) => 
-              sale.items.map((item: any) => ({
-                productId: item.productId,
-                productName: item.productName,
-                quantitySold: item.quantity,
-                unitPrice: item.unitPrice,
-                total: item.total
-              }))
-            );
-
-            const weeklyReport: InventoryReport = {
-              id: `weekly-${dateStr}`,
-              date: dateStr,
-              type: 'weekly',
-              period: `Inventaire semaine du ${lastMonday.toLocaleDateString('fr-FR')}`,
-              items,
-              totalSales: items.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
-              totalValue: items.reduce((sum, item) => sum + item.total, 0)
-            };
-
-            setReports(prev => {
-              const exists = prev.find(r => r.id === weeklyReport.id);
-              if (!exists) {
-                return [...prev, weeklyReport];
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching sales for weekly inventory:', error);
-      }
-    };
-
-    fetchSalesData();
-  };
-
-  const generateMonthlyInventory = () => {
-    const today = new Date();
-    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const dateStr = lastMonth.toISOString().split('T')[0];
-    
-    // Récupérer les ventes réelles depuis l'API
-    const fetchSalesData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const salesData = await salesRes.json();
-
-        if (salesData.success) {
-          const sales = salesData.data.sales || salesData.data;
-          // Filtrer les ventes du mois dernier
-          const monthStart = new Date(lastMonth);
-          const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-
-          const monthlySales = sales.filter((sale: any) => {
-            const saleDate = new Date(sale.createdAt);
-            return saleDate >= monthStart && saleDate <= monthEnd;
-          });
-
-          if (monthlySales.length > 0) {
-            const items = monthlySales.flatMap((sale: any) => 
-              sale.items.map((item: any) => ({
-                productId: item.productId,
-                productName: item.productName,
-                quantitySold: item.quantity,
-                unitPrice: item.unitPrice,
-                total: item.total
-              }))
-            );
-
-            const monthlyReport: InventoryReport = {
-              id: `monthly-${dateStr}`,
-              date: dateStr,
-              type: 'monthly',
-              period: `Inventaire ${lastMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`,
-              items,
-              totalSales: items.reduce((sum, item) => sum + (item.quantitySold * item.unitPrice), 0),
-              totalValue: items.reduce((sum, item) => sum + item.total, 0)
-            };
-
-            setReports(prev => {
-              const exists = prev.find(r => r.id === monthlyReport.id);
-              if (!exists) {
-                return [...prev, monthlyReport];
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching sales for monthly inventory:', error);
-      }
-    };
-
-    fetchSalesData();
-  };
-
-  const generatePDF = async (report: InventoryReport) => {
-    const element = document.getElementById(`inventory-${report.id}`);
-    if (!element) return;
-
+  // Charger les inventaires depuis l'API
+  const fetchInventories = async () => {
+    setLoading(true);
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        logging: false,
-        useCORS: true,
+      const response = await fetch(`${API_BASE_URL}/api/inventories?type=${selectedPeriod}`, {
+        ...getFetchOptions(),
       });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`inventaire-${report.type}-${report.date}.pdf`);
-      toast({ title: "PDF généré", description: `L'inventaire ${report.period} a été téléchargé` });
+      const data = await response.json();
+
+      if (data.success) {
+        setReports(data.data);
+      }
     } catch (error) {
-      toast({ title: "Erreur", description: "Impossible de générer le PDF", variant: "destructive" });
+      console.error('Error fetching inventories:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const printInventory = (report: InventoryReport) => {
-    const element = document.getElementById(`inventory-${report.id}`);
+  useEffect(() => {
+    fetchInventories();
+  }, [selectedPeriod]);
+
+  // Régénérer les inventaires
+  const handleRegenerate = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventories/regenerate`, {
+        method: 'POST',
+        ...getFetchOptions(),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ types: ['daily', 'weekly', 'monthly'] }),
+      });
+
+      if (response.ok) {
+        toast({ title: "Succès", description: "Inventaires régénérés avec succès" });
+        fetchInventories();
+      } else {
+        toast({ title: "Erreur", description: "Impossible de régénérer les inventaires", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error regenerating inventories:', error);
+      toast({ title: "Erreur", description: "Erreur lors de la régénération", variant: "destructive" });
+    }
+  };
+
+  const printInventory = (report: any) => {
+    const element = document.getElementById(`inventory-${report._id}`);
     if (!element) return;
     
     const printWindow = window.open('', '_blank');
@@ -330,21 +128,42 @@ const Inventory = () => {
     toast({ title: "Impression lancée", description: `${report.period} est prêt à être imprimé` });
   };
 
-  const sendInventory = async (report: InventoryReport) => {
+  const generatePDF = async (report: any) => {
+    const element = document.getElementById(`inventory-${report._id}`);
+    if (!element) return;
+
     try {
-      // Simulation d'envoi d'email
-      toast({ title: "Email envoyé", description: `${report.period} a été envoyé par email` });
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        logging: false,
+        useCORS: true,
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const imgWidth = 210;
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`inventaire-${report.type}-${report.date}.pdf`);
+      toast({ title: "PDF généré", description: `L'inventaire ${report.period} a été téléchargé` });
     } catch (error) {
-      toast({ title: "Erreur", description: "Impossible d'envoyer l'email", variant: "destructive" });
+      toast({ title: "Erreur", description: "Impossible de générer le PDF", variant: "destructive" });
     }
   };
 
   const filteredReports = reports.filter(report => {
     const matchesPeriod = report.type === selectedPeriod;
     const matchesSearch = searchTerm === "" ||
-      report.period.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.date.includes(searchTerm) ||
-      report.items.some(item => item.productName.toLowerCase().includes(searchTerm.toLowerCase()));
+      report.period?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.date?.includes(searchTerm) ||
+      (report.items || []).some((item: any) => item.productName?.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesPeriod && matchesSearch;
   });
 
@@ -358,9 +177,9 @@ const Inventory = () => {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleRegenerate}>
             <Calendar className="mr-2 h-4 w-4" />
-            {selectedPeriod === 'daily' ? 'Hier' : selectedPeriod === 'weekly' ? 'Semaine dernière' : 'Mois dernier'}
+            Régénérer
           </Button>
         </div>
       </div>
@@ -368,13 +187,13 @@ const Inventory = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total produits</CardTitle>
+            <CardTitle className="text-sm font-medium">Inventaires générés</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{reports.length}</div>
             <p className="text-xs text-muted-foreground">
-              Rapports générés
+              {selectedPeriod === 'daily' ? 'Journaliers' : selectedPeriod === 'weekly' ? 'Hebdomadaires' : 'Mensuels'}
             </p>
           </CardContent>
         </Card>
@@ -385,7 +204,9 @@ const Inventory = () => {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">
+              {reports.length > 0 ? reports[0]?.lowStockProducts || 0 : 0}
+            </div>
             <p className="text-xs text-muted-foreground">
               Réapprovisionnement requis
             </p>
@@ -399,10 +220,10 @@ const Inventory = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {reports.length > 0 ? formatCurrency(reports.reduce((sum, r) => sum + r.totalValue, 0)) : '0 FCFA'}
+              {reports.length > 0 ? formatCurrency(reports.reduce((sum, r) => sum + (r.totalValue || 0), 0)) : '0 FCFA'}
             </div>
             <p className="text-xs text-muted-foreground">
-              Basé sur les rapports
+              Basé sur les inventaires
             </p>
           </CardContent>
         </Card>
@@ -413,9 +234,11 @@ const Inventory = () => {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
+            <div className="text-2xl font-bold">
+              {reports.length > 0 && reports[0]?.stockRotation ? `${reports[0].stockRotation.toFixed(1)}%` : '-'}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Données insuffisantes
+              {reports.length > 0 && reports[0]?.stockRotation ? 'Produits vendus / Stock total' : 'Données insuffisantes'}
             </p>
           </CardContent>
         </Card>
@@ -449,17 +272,19 @@ const Inventory = () => {
 
             <TabsContent value="daily" className="mt-0">
               <div className="space-y-4">
-                {filteredReports.length === 0 ? (
+                {loading ? (
+                  <div className="text-center py-8 text-muted-foreground">Chargement...</div>
+                ) : filteredReports.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     Aucun inventaire journalier disponible
                   </div>
                 ) : (
                   filteredReports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div key={report._id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="space-y-1">
                         <p className="font-medium">{report.period}</p>
                         <p className="text-sm text-muted-foreground">
-                          {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
+                          {report.items?.length || 0} produits • Total: {formatCurrency(report.totalValue || 0)}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -471,9 +296,6 @@ const Inventory = () => {
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
                           <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
-                          <Mail className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -484,17 +306,19 @@ const Inventory = () => {
 
             <TabsContent value="weekly" className="mt-0">
               <div className="space-y-4">
-                {filteredReports.length === 0 ? (
+                {loading ? (
+                  <div className="text-center py-8 text-muted-foreground">Chargement...</div>
+                ) : filteredReports.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     Aucun inventaire hebdomadaire disponible
                   </div>
                 ) : (
                   filteredReports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div key={report._id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="space-y-1">
                         <p className="font-medium">{report.period}</p>
                         <p className="text-sm text-muted-foreground">
-                          {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
+                          {report.items?.length || 0} produits • Total: {formatCurrency(report.totalValue || 0)}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -506,9 +330,6 @@ const Inventory = () => {
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
                           <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
-                          <Mail className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -519,17 +340,19 @@ const Inventory = () => {
 
             <TabsContent value="monthly" className="mt-0">
               <div className="space-y-4">
-                {filteredReports.length === 0 ? (
+                {loading ? (
+                  <div className="text-center py-8 text-muted-foreground">Chargement...</div>
+                ) : filteredReports.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     Aucun inventaire mensuel disponible
                   </div>
                 ) : (
                   filteredReports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div key={report._id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="space-y-1">
                         <p className="font-medium">{report.period}</p>
                         <p className="text-sm text-muted-foreground">
-                          {report.items.length} produits • Total: {formatCurrency(report.totalValue)}
+                          {report.items?.length || 0} produits • Total: {formatCurrency(report.totalValue || 0)}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -541,9 +364,6 @@ const Inventory = () => {
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => generatePDF(report)}>
                           <Download className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => sendInventory(report)}>
-                          <Mail className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -562,7 +382,7 @@ const Inventory = () => {
           </DialogHeader>
           {selectedReport && (
             <>
-              <div id={`inventory-${selectedReport.id}`} className="p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
+              <div id={`inventory-${selectedReport._id}`} className="p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
                 <div className="text-center border-b-2 border-gray-900 pb-4 mb-6">
                   <h2 className="text-2xl font-bold text-gray-900">RAPPORT D'INVENTAIRE</h2>
                   <p className="text-lg text-gray-900">{selectedReport.period}</p>
@@ -571,8 +391,8 @@ const Inventory = () => {
                 <div className="grid grid-cols-2 gap-8 mb-6">
                   <div>
                     <h3 className="font-bold mb-2 text-gray-900">Résumé</h3>
-                    <p className="text-sm text-gray-900">Nombre de produits: {selectedReport.items.length}</p>
-                    <p className="text-sm text-gray-900">Ventes totales: {formatCurrency(selectedReport.totalValue)}</p>
+                    <p className="text-sm text-gray-900">Nombre de produits: {selectedReport.items?.length || 0}</p>
+                    <p className="text-sm text-gray-900">Ventes totales: {formatCurrency(selectedReport.totalValue || 0)}</p>
                     <p className="text-sm text-gray-900">Date: {new Date(selectedReport.date).toLocaleDateString('fr-FR')}</p>
                   </div>
                   <div>
@@ -594,7 +414,7 @@ const Inventory = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedReport.items.map((item, i) => (
+                      {(selectedReport.items || []).map((item: any, i: number) => (
                         <tr key={i}>
                           <td className="border border-gray-300 px-4 py-2 text-gray-900">{item.productName}</td>
                           <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.quantitySold}</td>
@@ -610,7 +430,7 @@ const Inventory = () => {
                   <div className="border border-gray-300 p-4 w-64 bg-gray-50">
                     <div className="flex justify-between">
                       <span className="font-bold text-lg text-gray-900">Total:</span>
-                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.totalValue)}</span>
+                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.totalValue || 0)}</span>
                     </div>
                   </div>
                 </div>

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { COMPANY_INFO } from "@/config/company";
 import "@/styles/print.css";
 
@@ -33,7 +33,6 @@ const Invoices = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const location = useLocation();
-  const token = localStorage.getItem("token");
 
   // Charger les factures depuis l'API
   useEffect(() => {
@@ -41,11 +40,11 @@ const Invoices = () => {
       try {
         console.log('Chargement des factures depuis:', API_BASE_URL);
         const response = await fetch(`${API_BASE_URL}/api/invoices`, {
-          headers: { Authorization: `Bearer ${token}` },
+          ...getFetchOptions(),
         });
         const data = await response.json();
         console.log('Réponse factures:', data);
-        
+
         if (data.success) {
           // Transformer les données de l'API pour correspondre à l'interface
           const transformedInvoices = data.data.map((inv: any) => ({
@@ -135,12 +134,11 @@ const Invoices = () => {
 
   const markAsPaid = async (invoice: Invoice) => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, {
         method: 'PUT',
+        ...getFetchOptions(),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ status: 'paid' }),
       });

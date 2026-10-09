@@ -3,7 +3,7 @@ import { DollarSign, Package, FileText, AlertTriangle, TrendingUp } from "lucide
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import KpiCard from "@/components/KpiCard";
 import { formatCurrency } from "@/data/mock-data";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 
 const Dashboard = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -16,15 +16,9 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
       // Récupérer les produits
       const productsRes = await fetch(`${API_BASE_URL}/api/products`, {
-        headers: { Authorization: `Bearer ${token}` },
+        ...getFetchOptions(),
       });
       const productsData = await productsRes.json();
       if (productsData.success) {
@@ -40,7 +34,7 @@ const Dashboard = () => {
 
       // Récupérer les ventes
       const salesRes = await fetch(`${API_BASE_URL}/api/sales`, {
-        headers: { Authorization: `Bearer ${token}` },
+        ...getFetchOptions(),
       });
       const salesData = await salesRes.json();
       if (salesData.success) {

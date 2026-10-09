@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { products as initialProducts, Product, formatCurrency } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { API_BASE_URL } from "@/config/api";
+import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { COMPANY_INFO } from "@/config/company";
 import "@/styles/print.css";
 
@@ -49,11 +49,8 @@ const Products = () => {
     
     const fetchProducts = async () => {
       try {
-        const token = localStorage.getItem('token');
         const response = await fetch(`${API_BASE_URL}/api/products`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          ...getFetchOptions(),
         });
         if (response.ok) {
           const data = await response.json();
@@ -104,19 +101,13 @@ const Products = () => {
   const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast({ title: "Erreur", description: "Vous devez être connecté pour ajouter un produit", variant: "destructive" });
-        return;
-      }
 
+    try {
       const response = await fetch(`${API_BASE_URL}/api/products`, {
         method: 'POST',
+        ...getFetchOptions(),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: fd.get("name"),
@@ -176,19 +167,13 @@ const Products = () => {
     e.preventDefault();
     if (!selectedProduct) return;
     const fd = new FormData(e.currentTarget);
-    
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        toast({ title: "Erreur", description: "Vous devez être connecté pour modifier un produit", variant: "destructive" });
-        return;
-      }
 
+    try {
       const response = await fetch(`${API_BASE_URL}/api/products/${selectedProduct.id}`, {
         method: 'PUT',
+        ...getFetchOptions(),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: fd.get("name"),
