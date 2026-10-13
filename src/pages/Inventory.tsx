@@ -189,13 +189,15 @@ const Inventory = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inventaires générés</CardTitle>
+            <CardTitle className="text-sm font-medium">Montant vendu</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{reports.length}</div>
+            <div className="text-2xl font-bold">
+              {reports.length > 0 ? formatCurrency(reports[0]?.totalSales || 0) : '0 FCFA'}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {selectedPeriod === 'daily' ? 'Journaliers' : selectedPeriod === 'weekly' ? 'Hebdomadaires' : 'Mensuels'}
+              {selectedPeriod === 'daily' ? 'Journalier' : selectedPeriod === 'weekly' ? 'Hebdomadaire' : 'Mensuel'}
             </p>
           </CardContent>
         </Card>
@@ -217,15 +219,30 @@ const Inventory = () => {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valeur totale</CardTitle>
+            <CardTitle className="text-sm font-medium">Valeur stock (gros)</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {reports.length > 0 ? formatCurrency(reports.reduce((sum, r) => sum + (r.totalValue || 0), 0)) : '0 FCFA'}
+              {reports.length > 0 ? formatCurrency(reports[0]?.stockValueWholesale || 0) : '0 FCFA'}
             </div>
             <p className="text-xs text-muted-foreground">
-              Basé sur les inventaires
+              Au prix de gros
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Valeur stock (détail)</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {reports.length > 0 ? formatCurrency(reports[0]?.stockValueRetail || 0) : '0 FCFA'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Au prix de détail
             </p>
           </CardContent>
         </Card>
@@ -286,7 +303,7 @@ const Inventory = () => {
                       <div className="space-y-1">
                         <p className="font-medium">{report.period}</p>
                         <p className="text-sm text-muted-foreground">
-                          {report.items?.length || 0} produits • Total: {formatCurrency(report.totalValue || 0)}
+                          {report.items?.length || 0} produits • Ventes: {formatCurrency(report.totalSales || 0)}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -320,7 +337,7 @@ const Inventory = () => {
                       <div className="space-y-1">
                         <p className="font-medium">{report.period}</p>
                         <p className="text-sm text-muted-foreground">
-                          {report.items?.length || 0} produits • Total: {formatCurrency(report.totalValue || 0)}
+                          {report.items?.length || 0} produits • Ventes: {formatCurrency(report.totalSales || 0)}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -354,7 +371,7 @@ const Inventory = () => {
                       <div className="space-y-1">
                         <p className="font-medium">{report.period}</p>
                         <p className="text-sm text-muted-foreground">
-                          {report.items?.length || 0} produits • Total: {formatCurrency(report.totalValue || 0)}
+                          {report.items?.length || 0} produits • Ventes: {formatCurrency(report.totalSales || 0)}
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -394,13 +411,14 @@ const Inventory = () => {
                   <div>
                     <h3 className="font-bold mb-2 text-gray-900">Résumé</h3>
                     <p className="text-sm text-gray-900">Nombre de produits: {selectedReport.items?.length || 0}</p>
-                    <p className="text-sm text-gray-900">Ventes totales: {formatCurrency(selectedReport.totalValue || 0)}</p>
+                    <p className="text-sm text-gray-900">Ventes totales: {formatCurrency(selectedReport.totalSales || 0)}</p>
+                    <p className="text-sm text-gray-900">Quantité vendue: {selectedReport.totalProductsSold || 0}</p>
                     <p className="text-sm text-gray-900">Date: {new Date(selectedReport.date).toLocaleDateString('fr-FR')}</p>
                   </div>
                   <div>
-                    <h3 className="font-bold mb-2 text-gray-900">Informations</h3>
-                    <p className="text-sm text-gray-900">Type: {selectedReport.type === 'daily' ? 'Journalier' : selectedReport.type === 'weekly' ? 'Hebdomadaire' : 'Mensuel'}</p>
-                    <p className="text-sm text-gray-900">Généré automatiquement</p>
+                    <h3 className="font-bold mb-2 text-gray-900">Valeur du stock</h3>
+                    <p className="text-sm text-gray-900">Prix de gros: {formatCurrency(selectedReport.stockValueWholesale || 0)}</p>
+                    <p className="text-sm text-gray-900">Prix de détail: {formatCurrency(selectedReport.stockValueRetail || 0)}</p>
                   </div>
                 </div>
 
@@ -410,8 +428,9 @@ const Inventory = () => {
                     <thead>
                       <tr className="bg-gray-100">
                         <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-900">Produit</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Quantité vendue</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Prix unitaire HT</th>
+                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Type</th>
+                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Quantité</th>
+                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Prix unitaire</th>
                         <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Total</th>
                       </tr>
                     </thead>
@@ -419,6 +438,7 @@ const Inventory = () => {
                       {(selectedReport.items || []).map((item: any, i: number) => (
                         <tr key={i}>
                           <td className="border border-gray-300 px-4 py-2 text-gray-900">{item.productName}</td>
+                          <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.typeVente === 'gros' ? 'Gros' : 'Détail'}</td>
                           <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.quantitySold}</td>
                           <td className="border border-gray-300 px-4 py-2 text-right text-gray-900">{formatCurrency(item.unitPrice)}</td>
                           <td className="border border-gray-300 px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(item.total)}</td>
@@ -432,7 +452,7 @@ const Inventory = () => {
                   <div className="border border-gray-300 p-4 w-64 bg-gray-50">
                     <div className="flex justify-between">
                       <span className="font-bold text-lg text-gray-900">Total:</span>
-                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.totalValue || 0)}</span>
+                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.totalSales || 0)}</span>
                     </div>
                   </div>
                 </div>
