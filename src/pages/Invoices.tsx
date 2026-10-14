@@ -123,12 +123,25 @@ const Invoices = () => {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const deleteInvoice = (invoice: Invoice) => {
-    if (window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.number} ?`)) {
-      const updatedList = invoiceList.filter((inv) => inv.id !== invoice.id);
-      setInvoiceList(updatedList);
-      localStorage.setItem('invoices', JSON.stringify(updatedList));
-      toast({ title: "Facture supprimée", description: `La facture ${invoice.number} a été supprimée` });
+  const deleteInvoice = async (invoice: Invoice) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.number} ?`)) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, {
+        method: 'DELETE',
+        ...getFetchOptions(),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setInvoiceList(invoiceList.filter((inv) => inv.id !== invoice.id));
+        toast({ title: "Facture supprimée", description: `La facture ${invoice.number} a été supprimée` });
+      } else {
+        toast({ title: "Erreur", description: data.message || "Impossible de supprimer la facture", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Erreur lors de la suppression de la facture:', error);
+      toast({ title: "Erreur", description: "Erreur de connexion au serveur", variant: "destructive" });
     }
   };
 
