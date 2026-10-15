@@ -27,6 +27,147 @@ const Reports = () => {
 
   const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
+  // Libellés français pour les clés des rapports (fiche + exports)
+  const headerMap: { [key: string]: string } = {
+    date: "Date",
+    product: "Produit",
+    quantity: "Quantité",
+    amount: "Montant",
+    customer: "Client",
+    stock: "Stock",
+    reserved: "Réservé",
+    available: "Disponible",
+    status: "Statut",
+    name: "Nom",
+    email: "Email",
+    phone: "Téléphone",
+    orders: "Commandes",
+    totalSpent: "Total dépensé",
+    totalSales: "Nombre de ventes",
+    totalProducts: "Nombre de produits",
+    totalCustomers: "Nombre de clients",
+    totalRevenue: "Chiffre d'affaires total",
+    averageOrderValue: "Panier moyen",
+    averageOrders: "Commandes moyennes",
+    totalStock: "Stock total",
+    totalReserved: "Stock réservé",
+    totalAvailable: "Stock disponible",
+    totalOrders: "Nombre de commandes",
+    type: "Type",
+    description: "Description",
+  };
+
+  const statusLabels: { [key: string]: string } = {
+    completed: "Terminée",
+    pending: "En attente",
+    cancelled: "Annulée",
+    overdue: "En retard",
+    paid: "Payée",
+    confirmed: "Confirmée",
+  };
+
+  const typeLabels: { [key: string]: string } = {
+    sales: "Ventes",
+    inventory: "Inventaire",
+    customers: "Clients",
+    financial: "Financier",
+  };
+
+  const typeTitles: { [key: string]: string } = {
+    sales: "Rapport de Ventes",
+    inventory: "Rapport d'Inventaire",
+    customers: "Rapport Clients",
+    financial: "Rapport Financier",
+  };
+
+  const periodLabels: { [key: string]: string } = {
+    day: "Aujourd'hui",
+    week: "Cette semaine",
+    month: "Ce mois",
+    year: "Cette année",
+  };
+
+  const currencyKeys = ['amount', 'totalSpent', 'revenue', 'totalRevenue', 'averageOrderValue'];
+
+  const formatFCFA = (amount: number) => `${amount.toLocaleString('fr-FR')} FCFA`;
+
+  const getReportTitle = (report: any) =>
+    `${typeTitles[report?.type] || report?.type || 'Rapport'} - ${periodLabels[report?.period] || report?.period || ''}`;
+
+  // Libellé de résumé adapté au type de rapport
+  const getSummaryLabel = (key: string, reportType: string) => {
+    if (key === 'totalProducts') {
+      return reportType === 'sales' ? 'Produits vendus' : 'Nombre de produits';
+    }
+    return headerMap[key] || key;
+  };
+
+  const formatCellValue = (key: string, value: any) => {
+    if (currencyKeys.includes(key)) {
+      return formatFCFA(Math.round(Number(value) || 0));
+    }
+    if (key === 'date') {
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString('fr-FR');
+    }
+    if (key === 'status' || key === 'type') {
+      return statusLabels[String(value)] || String(value);
+    }
+    return String(value);
+  };
+
+  // Résumé affiché dans la fiche et les exports : pour les ventes, les valeurs
+  // sont recalculées depuis les lignes du tableau (toujours cohérentes, même
+  // pour les rapports générés avant le correctif). Les tableaux (topProducts)
+  // sont exclus.
+  const getDisplaySummary = (report: any) => {
+    const rows = report?.data || [];
+    const type = report?.type || currentReportType;
+
+    if (type === 'sales') {
+      const totalRevenue = rows.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+      const totalSales = rows.length;
+      const productsSold = rows.reduce((s: number, r: any) => s + (Number(r.quantity) || 0), 0);
+      const customers = new Set(rows.map((r: any) => r.customer)).size;
+      return [
+        { label: 'Nombre de ventes', value: String(totalSales) },
+        { label: 'Produits vendus', value: String(productsSold) },
+        { label: 'Nombre de clients', value: String(customers) },
+        { label: "Chiffre d'affaires total", value: formatFCFA(totalRevenue) },
+        { label: 'Panier moyen', value: formatFCFA(totalSales > 0 ? Math.round(totalRevenue / totalSales) : 0) },
+      ];
+    }
+
+    return Object.entries(report?.summary || {})
+      .filter(([, value]) => !Array.isArray(value) && typeof value !== 'object')
+      .map(([key, value]) => {
+        const num = Number(value);
+        let formatted = String(value);
+        if (!isNaN(num) && value !== '' && value !== null) {
+          formatted = currencyKeys.includes(key)
+            ? formatFCFA(Math.round(num))
+            : String(Number.isInteger(num) ? num : Math.round(num * 10) / 10);
+        }
+        return { label: getSummaryLabel(key, type), value: formatted };
+      });
+  };
+
+  // Objet JSON exporté : clés en français, sans topProducts ni objets bruts
+  const buildExportJSON = (report: any) => {
+    const headers = report?.data?.length > 0 ? Object.keys(report.data[0]) : [];
+    return {
+      titre: getReportTitle(report),
+      type: typeLabels[report?.type] || report?.type,
+      periode: periodLabels[report?.period] || report?.period,
+      genereLe: new Date().toLocaleDateString('fr-FR'),
+      entreprise: `${COMPANY_INFO.name} - ${COMPANY_INFO.description}`,
+      resume: Object.fromEntries(getDisplaySummary(report).map(i => [i.label, i.value])),
+      details: (report?.data || []).map((row: any) =>
+        Object.fromEntries(headers.map(h => [headerMap[h] || h, formatCellValue(h, row[h])]))
+      ),
+    };
+  };
+
   // Charger les rapports depuis l'API
   const fetchReports = async () => {
     setLoading(true);
@@ -110,7 +251,8 @@ const Reports = () => {
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
     return {
-      title: `Rapport ${type} - ${period}`,
+      title: `${typeTitles[type] || type} - ${periodLabels[period] || period}`,
+      type: type,
       period: period,
       startDate: formatDate(startDate),
       endDate: formatDate(endDate),
@@ -151,147 +293,81 @@ const Reports = () => {
   };
 
   const handleDownloadReport = (reportType: string, format: string) => {
-    const reportData = generateReportData(reportType, dateRange);
+    // Si la fiche est ouverte, exporter exactement le rapport affiché
+    const reportData = viewingReport && viewingReport.type === reportType
+      ? viewingReport
+      : generateReportData(reportType, dateRange);
+    const slug = (typeLabels[reportType] || reportType).toLowerCase();
+    const fileDate = new Date().toISOString().split('T')[0];
     
+    const download = (content: string, filename: string, mime: string) => {
+      const blob = new Blob([content], { type: mime });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    };
+
     if (format === "csv") {
-      const content = generateCSV(reportData);
-      const filename = `rapport-${reportType}-${new Date().toISOString().split('T')[0]}.csv`;
-      const blob = new Blob([content], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      download(generateCSV(reportData), `rapport-${slug}-${fileDate}.csv`, "text/csv");
     } else if (format === "txt") {
-      const content = generateTXT(reportData);
-      const filename = `rapport-${reportType}-${new Date().toISOString().split('T')[0]}.txt`;
-      const blob = new Blob([content], { type: "text/plain" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      download(generateTXT(reportData), `rapport-${slug}-${fileDate}.txt`, "text/plain");
     } else if (format === "json") {
-      const content = JSON.stringify(reportData, null, 2);
-      const filename = `rapport-${reportType}-${new Date().toISOString().split('T')[0]}.json`;
-      const blob = new Blob([content], { type: "application/json" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      download(JSON.stringify(buildExportJSON(reportData), null, 2), `rapport-${slug}-${fileDate}.json`, "application/json");
     } else if (format === "pdf") {
       generatePDF(reportData);
     }
   };
 
   const generateCSV = (reportData: any) => {
-    if (reportData.data.length === 0) return "";
-    
-    // Headers en français
-    const headerMap: { [key: string]: string } = {
-      date: "Date",
-      product: "Produit",
-      quantity: "Quantité",
-      amount: "Montant",
-      customer: "Client",
-      stock: "Stock",
-      reserved: "Réservé",
-      available: "Disponible",
-      status: "Statut",
-      name: "Nom",
-      email: "Email",
-      phone: "Téléphone",
-      orders: "Commandes",
-      totalSpent: "Total Dépensé",
-      totalRevenue: "Chiffre d'affaires",
-      averageOrders: "Commandes Moyennes",
-      totalSales: "Total ventes",
-      totalProducts: "Quantité totale vendue",
-      totalCustomers: "Clients",
-      averageOrderValue: "Panier moyen",
-      topProducts: "Produits les plus vendus"
-    };
-    
-    const headers = Object.keys(reportData.data[0]).map(key => headerMap[key] || key).join(",");
-    
-    // Formatage des valeurs
-    const rows = reportData.data.map((row: any) => {
-      return Object.values(row).map((value: any) => {
-        // Gérer les valeurs contenant des virgules ou des guillemets
-        const strValue = String(value);
-        if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
-          return `"${strValue.replace(/"/g, '""')}"`;
-        }
-        return strValue;
-      }).join(",");
-    }).join("\n");
-    
-    // Ajouter un résumé au début
-    let content = `${reportData.title}\n`;
+    const rows = reportData.data || [];
+    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+    const escape = (v: string) =>
+      v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v;
+
+    let content = `${getReportTitle(reportData)}\n`;
     content += `Généré le: ${new Date().toLocaleDateString('fr-FR')}\n\n`;
 
-    if (reportData.summary) {
-      content += "RÉSUMÉ\n";
-      Object.entries(reportData.summary).forEach(([key, value]) => {
-        const frenchKey = headerMap[key] || key;
-        // Gérer les tableaux (comme topProducts)
-        if (Array.isArray(value)) {
-          content += `${frenchKey}:\n`;
-          value.forEach((item: any, idx: number) => {
-            content += `  ${idx + 1}. ${item.productName || item.name || 'Produit'} - ${item.quantitySold || item.quantity || 0} unités - ${item.revenue || item.total || 0} F CFA\n`;
-          });
-        } else {
-          content += `${frenchKey}: ${value}\n`;
-        }
-      });
-      content += "\n";
+    content += "RÉSUMÉ\n";
+    getDisplaySummary(reportData).forEach((item) => {
+      content += `${item.label}: ${item.value}\n`;
+    });
+
+    if (headers.length > 0) {
+      content += "\nDÉTAILS\n";
+      content += headers.map((h) => headerMap[h] || h).join(",") + "\n";
+      content += rows
+        .map((row: any) => headers.map((h) => escape(formatCellValue(h, row[h]))).join(","))
+        .join("\n");
     }
-    
-    content += "DÉTAILS\n";
-    content += `${headers}\n`;
-    content += rows;
-    
+
     return content;
   };
 
   const generateTXT = (reportData: any) => {
-    let content = `${reportData.title}\n`;
+    let content = `${getReportTitle(reportData)}\n`;
     content += `${"=".repeat(50)}\n\n`;
     content += `Généré le: ${new Date().toLocaleDateString('fr-FR')}\n\n`;
-    
-    if (reportData.summary) {
-      content += `RÉSUMÉ:\n`;
-      content += `${"-".repeat(20)}\n`;
-      Object.entries(reportData.summary).forEach(([key, value]) => {
-        const frenchKey = headerMap[key] || key;
-        // Gérer les tableaux (comme topProducts)
-        if (Array.isArray(value)) {
-          content += `${frenchKey}:\n`;
-          value.forEach((item: any, idx: number) => {
-            content += `  ${idx + 1}. ${item.productName || item.name || 'Produit'} - ${item.quantitySold || item.quantity || 0} unités - ${item.revenue || item.total || 0} F CFA\n`;
-          });
-        } else {
-          content += `${frenchKey}: ${value}\n`;
-        }
-      });
-      content += "\n";
-    }
-    
-    content += `DÉTAILS:\n`;
+
+    content += `RÉSUMÉ:\n`;
     content += `${"-".repeat(20)}\n`;
-    reportData.data.forEach((row: any, index: number) => {
+    getDisplaySummary(reportData).forEach((item) => {
+      content += `${item.label}: ${item.value}\n`;
+    });
+
+    content += `\nDÉTAILS:\n`;
+    content += `${"-".repeat(20)}\n`;
+    (reportData.data || []).forEach((row: any, index: number) => {
       content += `\n${index + 1}. `;
-      Object.entries(row).forEach(([key, value]) => {
-        content += `${key}: ${value} | `;
-      });
-      content = content.slice(0, -2); // Remove last " | "
+      content += Object.entries(row)
+        .map(([key, value]) => `${headerMap[key] || key}: ${formatCellValue(key, value)}`)
+        .join(' | ');
       content += "\n";
     });
-    
+
     return content;
   };
 
@@ -321,7 +397,8 @@ const Reports = () => {
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`rapport-${currentReportType}-${new Date().toISOString().split('T')[0]}.pdf`);
+      const slug = (typeLabels[currentReportType] || currentReportType).toLowerCase();
+      pdf.save(`rapport-${slug}-${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
@@ -338,7 +415,7 @@ const Reports = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Rapport - ${viewingReport.title}</title>
+          <title>${getReportTitle(viewingReport)}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
             body { 
@@ -376,6 +453,13 @@ const Reports = () => {
               border: 1px solid #000;
               padding: 10px;
               background: #f9f9f9;
+              page-break-inside: avoid;
+            }
+            .summary-section {
+              page-break-inside: avoid;
+            }
+            thead {
+              display: table-header-group;
             }
             .summary-item p:first-child {
               font-size: 9pt;
@@ -410,19 +494,19 @@ const Reports = () => {
         </head>
         <body class="print-window-body">
           <div class="document-header">
-            <h2>${viewingReport.title}</h2>
+            <h2>${getReportTitle(viewingReport)}</h2>
             <p>Rapport généré le ${new Date().toLocaleDateString('fr-FR')}</p>
             <p style="font-size: 10pt;">${COMPANY_INFO.name} - ${COMPANY_INFO.description}</p>
           </div>
           
-          ${viewingReport.summary && Object.keys(viewingReport.summary).length > 0 ? `
+          ${getDisplaySummary(viewingReport).length > 0 ? `
           <div class="summary-section">
             <h3 style="font-size: 14pt; margin-bottom: 10px;">Résumé</h3>
             <div class="summary-grid">
-              ${Object.entries(viewingReport.summary).map(([key, value]) => `
+              ${getDisplaySummary(viewingReport).map((item) => `
                 <div class="summary-item">
-                  <p>${key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                  <p>${String(value)}</p>
+                  <p>${item.label}</p>
+                  <p>${item.value}</p>
                 </div>
               `).join('')}
             </div>
@@ -434,15 +518,15 @@ const Reports = () => {
             <thead>
               <tr>
                 ${viewingReport.data.length > 0 ? Object.keys(viewingReport.data[0]).map(header => `
-                  <th>${header.charAt(0).toUpperCase() + header.slice(1)}</th>
+                  <th>${headerMap[header] || header}</th>
                 `).join('') : ''}
               </tr>
             </thead>
             <tbody>
               ${viewingReport.data.map((row: any) => `
                 <tr>
-                  ${Object.values(row).map((value: any) => `
-                    <td>${String(value)}</td>
+                  ${Object.keys(viewingReport.data[0] || {}).map((key) => `
+                    <td>${formatCellValue(key, row[key])}</td>
                   `).join('')}
                 </tr>
               `).join('')}
@@ -458,6 +542,12 @@ const Reports = () => {
       printWindow.print();
     };
   };
+
+  // Premier rapport de ventes disposant d'un classement de produits
+  const topProducts: any[] =
+    savedReports.find((r) => r.type === 'sales' && Array.isArray(r.summary?.topProducts))
+      ?.summary?.topProducts || [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -575,7 +665,7 @@ const Reports = () => {
                         <FileText className="h-4 w-4 text-muted-foreground" />
                         <p className="font-medium">{report.title}</p>
                       </div>
-                      <p className="text-sm text-muted-foreground">{report.type} • {new Date(report.date).toLocaleDateString('fr-FR')}</p>
+                      <p className="text-sm text-muted-foreground">{typeLabels[report.type] || report.type} • {new Date(report.date).toLocaleDateString('fr-FR')}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Badge variant="default">Disponible</Badge>
@@ -656,10 +746,10 @@ const Reports = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {savedReports.length === 0 || !savedReports[0]?.data?.summary?.topProducts || savedReports[0]?.data?.summary?.topProducts.length === 0 ? (
+            {topProducts.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Aucune donnée disponible</p>
             ) : (
-              savedReports[0]?.data?.summary?.topProducts.slice(0, 5).map((item: any, index: number) => (
+              topProducts.slice(0, 5).map((item: any, index: number) => (
                 <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-medium text-sm">
@@ -671,7 +761,7 @@ const Reports = () => {
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <span className="font-medium">{item.revenue?.toLocaleString('fr-FR') || '0'} F CFA</span>
+                    <span className="font-medium">{formatFCFA(item.revenue || 0)}</span>
                     <Badge variant="default" className="text-green-600">
                       <TrendingUp className="mr-1 h-3 w-3" />
                       Top produit
@@ -691,7 +781,7 @@ const Reports = () => {
             <div>
               <h2 className="text-2xl font-bold flex items-center space-x-2 text-black">
                 <FileText className="h-6 w-6 text-black" />
-                <span>{viewingReport.title}</span>
+                <span>{getReportTitle(viewingReport)}</span>
               </h2>
               <p className="text-gray-700 mt-2">
                 Rapport généré le {new Date().toLocaleDateString('fr-FR')}
@@ -739,16 +829,14 @@ const Reports = () => {
 
           <div>
             {/* Summary Section */}
-            {viewingReport.summary && Object.keys(viewingReport.summary).length > 0 && (
+            {getDisplaySummary(viewingReport).length > 0 && (
               <div className="mb-6">
                 <h3 className="text-lg font-semibold mb-4 text-black">Résumé</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(viewingReport.summary).map(([key, value]) => (
-                    <div key={key} className="p-4 border border-gray-300 rounded-lg bg-gray-50">
-                      <p className="text-sm capitalize text-gray-700">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}
-                      </p>
-                      <p className="text-xl font-bold text-black">{String(value)}</p>
+                  {getDisplaySummary(viewingReport).map((item, index) => (
+                    <div key={index} className="p-4 border border-gray-300 rounded-lg bg-gray-50">
+                      <p className="text-sm text-gray-700">{item.label}</p>
+                      <p className="text-xl font-bold text-black">{item.value}</p>
                     </div>
                   ))}
                 </div>
@@ -764,7 +852,7 @@ const Reports = () => {
                     <tr className="border-b border-gray-300 bg-gray-100">
                       {viewingReport.data.length > 0 && Object.keys(viewingReport.data[0]).map((header) => (
                         <th key={header} className="text-left p-2 border-b border-gray-300 font-medium text-black">
-                          {header.charAt(0).toUpperCase() + header.slice(1)}
+                          {headerMap[header] || header}
                         </th>
                       ))}
                     </tr>
@@ -772,9 +860,9 @@ const Reports = () => {
                   <tbody>
                     {viewingReport.data.map((row: any, index: number) => (
                       <tr key={index} className="border-b border-gray-300 hover:bg-gray-50">
-                        {Object.values(row).map((value: any, cellIndex: number) => (
+                        {Object.keys(viewingReport.data[0] || {}).map((key, cellIndex) => (
                           <td key={cellIndex} className="p-2 border-b border-gray-300 text-black">
-                            {String(value)}
+                            {formatCellValue(key, row[key])}
                           </td>
                         ))}
                       </tr>
