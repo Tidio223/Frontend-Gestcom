@@ -160,6 +160,96 @@ const Inventory = () => {
     }
   };
 
+  // Bilan du stock (prix de gros) : valeurs calculées et persistées par le backend
+  const getBilanLines = (report: any) => {
+    if (!report || report.montantStockActuel == null) return null;
+    const lines: { label: string; value: string; ecart?: boolean }[] = [
+      { label: "Montant du stock au début", value: formatCurrency(report.montantOuverture || 0) },
+    ];
+    if ((report.montantEntrees || 0) > 0) {
+      lines.push({ label: "Entrées de stock (au prix de gros)", value: `+ ${formatCurrency(report.montantEntrees)}` });
+    }
+    lines.push({ label: "Montant de l'inventaire (sorties au prix de gros)", value: `- ${formatCurrency(report.montantInventaire || 0)}` });
+    lines.push({ label: "Montant actuel du stock", value: formatCurrency(report.montantStockActuel) });
+    if (Math.abs(report.ecartStock || 0) > 1) {
+      lines.push({
+        label: `Écart avec le stock réel (${formatCurrency(report.montantStockReel || 0)})`,
+        value: formatCurrency(report.ecartStock),
+        ecart: true,
+      });
+    }
+    return lines;
+  };
+
+  // Exports CSV / JSON / TXT de la fiche (mêmes données que l'affichage)
+  const exportInventory = (report: any, format: 'csv' | 'json' | 'txt') => {
+    const items = report.items || [];
+    const totalGros = report.montantInventaire ?? items.reduce((s: number, i: any) => s + (i.total || 0), 0);
+    const bilan = getBilanLines(report);
+    const detailRows = items.map((i: any) => ({
+      'Produit': i.productName,
+      'Type': i.typeVente === 'gros' ? 'Gros' : 'Détail',
+      'Quantité': i.quantitySold,
+      'Prix unitaire (prix de gros)': formatCurrency(i.unitPrice || 0),
+      'Total': formatCurrency(i.total || 0),
+    }));
+    const summaryRows = [
+      ['Nombre de produits', String(items.length)],
+      ["Montant de l'inventaire (prix de gros)", formatCurrency(totalGros)],
+      ['Quantité vendue', String(report.totalProductsSold || 0)],
+      ['Date', new Date(report.date).toLocaleDateString('fr-FR')],
+      ['Valeur du stock au prix de gros', formatCurrency(report.stockValueWholesale || 0)],
+    ];
+
+    const download = (content: string, filename: string, mime: string) => {
+      const blob = new Blob([content], { type: mime });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    };
+
+    const slug = `inventaire-${report.type}-${String(report.date).slice(0, 10)}`;
+
+    if (format === 'json') {
+      download(JSON.stringify({
+        titre: "Rapport d'Inventaire",
+        periode: report.period,
+        resume: Object.fromEntries(summaryRows),
+        bilanStock: bilan ? Object.fromEntries(bilan.map(l => [l.label, l.value])) : undefined,
+        details: detailRows,
+      }, null, 2), `${slug}.json`, 'application/json');
+    } else if (format === 'csv') {
+      const esc = (v: string) => v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v;
+      let content = `RAPPORT D'INVENTAIRE - ${report.period}\n\nRÉSUMÉ\n`;
+      summaryRows.forEach(([k, v]) => { content += `${esc(k)},${esc(v)}\n`; });
+      if (bilan) {
+        content += '\nBILAN DU STOCK (prix de gros)\n';
+        bilan.forEach(l => { content += `${esc(l.label)},${esc(l.value)}\n`; });
+      }
+      const headers = Object.keys(detailRows[0] || { 'Produit': '', 'Type': '', 'Quantité': '', 'Prix unitaire (prix de gros)': '', 'Total': '' });
+      content += '\nDÉTAIL DES SORTIES DE STOCK (PRIX DE GROS)\n';
+      content += headers.map(esc).join(',') + '\n';
+      detailRows.forEach((r: any) => { content += headers.map(h => esc(String(r[h]))).join(',') + '\n'; });
+      download(content, `${slug}.csv`, 'text/csv');
+    } else {
+      let content = `RAPPORT D'INVENTAIRE - ${report.period}\n${'='.repeat(50)}\n\nRÉSUMÉ:\n${'-'.repeat(20)}\n`;
+      summaryRows.forEach(([k, v]) => { content += `${k}: ${v}\n`; });
+      if (bilan) {
+        content += `\nBILAN DU STOCK (prix de gros):\n${'-'.repeat(20)}\n`;
+        bilan.forEach(l => { content += `${l.label}: ${l.value}\n`; });
+      }
+      content += `\nDÉTAIL DES SORTIES DE STOCK (PRIX DE GROS):\n${'-'.repeat(20)}\n`;
+      detailRows.forEach((r: any, i: number) => {
+        content += `${i + 1}. ${Object.values(r).join(' | ')}\n`;
+      });
+      download(content, `${slug}.txt`, 'text/plain');
+    }
+    toast({ title: 'Export généré', description: `Inventaire ${report.period} exporté en ${format.toUpperCase()}` });
+  };
+
   const filteredReports = reports.filter(report => {
     const matchesPeriod = report.type === selectedPeriod;
     const matchesSearch = searchTerm === "" ||
@@ -187,6 +277,25 @@ const Inventory = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Montant actuel du stock (prix de gros)</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {reports.length > 0 && reports[0]?.montantStockActuel != null
+                ? formatCurrency(reports[0].montantStockActuel)
+                : '0 FCFA'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {reports.length > 0 && Math.abs(reports[0]?.ecartStock || 0) > 1
+                ? `Écart de ${formatCurrency(Math.abs(reports[0].ecartStock))} avec le stock réel`
+                : 'Ouverture + entrées − inventaire'}
+            </p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Montant vendu</CardTitle>
@@ -411,19 +520,39 @@ const Inventory = () => {
                   <div>
                     <h3 className="font-bold mb-2 text-gray-900">Résumé</h3>
                     <p className="text-sm text-gray-900">Nombre de produits: {selectedReport.items?.length || 0}</p>
-                    <p className="text-sm text-gray-900">Ventes totales: {formatCurrency(selectedReport.totalSales || 0)}</p>
+                    <p className="text-sm text-gray-900">Montant de l'inventaire (prix de gros): {formatCurrency(selectedReport.montantInventaire ?? (selectedReport.items || []).reduce((s: number, i: any) => s + (i.total || 0), 0))}</p>
                     <p className="text-sm text-gray-900">Quantité vendue: {selectedReport.totalProductsSold || 0}</p>
                     <p className="text-sm text-gray-900">Date: {new Date(selectedReport.date).toLocaleDateString('fr-FR')}</p>
                   </div>
                   <div>
                     <h3 className="font-bold mb-2 text-gray-900">Valeur du stock</h3>
                     <p className="text-sm text-gray-900">Prix de gros: {formatCurrency(selectedReport.stockValueWholesale || 0)}</p>
-                    <p className="text-sm text-gray-900">Prix de détail: {formatCurrency(selectedReport.stockValueRetail || 0)}</p>
                   </div>
                 </div>
 
+                {getBilanLines(selectedReport) && (
+                  <div className="mb-6">
+                    <h3 className="font-bold mb-2 text-gray-900">Bilan du stock</h3>
+                    <table className="w-full border-collapse border border-gray-300">
+                      <tbody>
+                        {getBilanLines(selectedReport)!.map((line, i) => (
+                          <tr key={i}>
+                            <td className={`border border-gray-300 px-4 py-2 text-sm ${line.ecart ? 'text-amber-700' : 'text-gray-900'}`}>
+                              {line.label}
+                            </td>
+                            <td className={`border border-gray-300 px-4 py-2 text-sm text-right font-medium ${line.ecart ? 'text-amber-700' : 'text-gray-900'}`}>
+                              {line.value}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="text-xs text-gray-600 mt-1">Montants valorisés au prix de gros.</p>
+                  </div>
+                )}
+
                 <div className="mb-6">
-                  <h3 className="font-bold mb-3 text-gray-900">Détail des ventes</h3>
+                  <h3 className="font-bold mb-3 text-gray-900">Détail des sorties de stock (prix de gros)</h3>
                   <table className="w-full border-collapse border border-gray-300">
                     <thead>
                       <tr className="bg-gray-100">
@@ -452,7 +581,7 @@ const Inventory = () => {
                   <div className="border border-gray-300 p-4 w-64 bg-gray-50">
                     <div className="flex justify-between">
                       <span className="font-bold text-lg text-gray-900">Total:</span>
-                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.totalSales || 0)}</span>
+                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.montantInventaire ?? (selectedReport.items || []).reduce((s: number, i: any) => s + (i.total || 0), 0))}</span>
                     </div>
                   </div>
                 </div>
@@ -472,6 +601,18 @@ const Inventory = () => {
                 <Button onClick={() => generatePDF(selectedReport)}>
                   <Download className="mr-2 h-4 w-4" />
                   Télécharger PDF
+                </Button>
+                <Button variant="outline" onClick={() => exportInventory(selectedReport, 'csv')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+                <Button variant="outline" onClick={() => exportInventory(selectedReport, 'json')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  JSON
+                </Button>
+                <Button variant="outline" onClick={() => exportInventory(selectedReport, 'txt')}>
+                  <Download className="mr-2 h-4 w-4" />
+                  TXT
                 </Button>
               </div>
             </>

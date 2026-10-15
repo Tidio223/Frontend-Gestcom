@@ -152,6 +152,29 @@ const Reports = () => {
       });
   };
 
+  // Bilan du stock (prix de gros) : lignes affichées dans la fiche, l'impression
+  // et les exports. Les valeurs sont calculées et persistées par le backend.
+  const getBilanLines = (report: any) => {
+    const b = report?.bilanStock;
+    if (!b || b.montantStockActuel == null) return null;
+    const lines: { label: string; value: string; ecart?: boolean }[] = [
+      { label: "Montant du stock au début", value: formatFCFA(b.montantOuverture || 0) },
+    ];
+    if ((b.montantEntrees || 0) > 0) {
+      lines.push({ label: "Entrées de stock (au prix de gros)", value: `+ ${formatFCFA(b.montantEntrees)}` });
+    }
+    lines.push({ label: "Montant de l'inventaire (sorties au prix de gros)", value: `- ${formatFCFA(b.montantInventaire || 0)}` });
+    lines.push({ label: "Montant actuel du stock", value: formatFCFA(b.montantStockActuel) });
+    if (Math.abs(b.ecartStock || 0) > 1) {
+      lines.push({
+        label: `Écart avec le stock réel (${formatFCFA(b.montantStockReel || 0)})`,
+        value: formatFCFA(b.ecartStock),
+        ecart: true,
+      });
+    }
+    return lines;
+  };
+
   // Objet JSON exporté : clés en français, sans topProducts ni objets bruts
   const buildExportJSON = (report: any) => {
     const headers = report?.data?.length > 0 ? Object.keys(report.data[0]) : [];
@@ -162,6 +185,9 @@ const Reports = () => {
       genereLe: new Date().toLocaleDateString('fr-FR'),
       entreprise: `${COMPANY_INFO.name} - ${COMPANY_INFO.description}`,
       resume: Object.fromEntries(getDisplaySummary(report).map(i => [i.label, i.value])),
+      bilanStock: getBilanLines(report)
+        ? Object.fromEntries(getBilanLines(report)!.map(i => [i.label, i.value]))
+        : undefined,
       details: (report?.data || []).map((row: any) =>
         Object.fromEntries(headers.map(h => [headerMap[h] || h, formatCellValue(h, row[h])]))
       ),
@@ -336,6 +362,14 @@ const Reports = () => {
       content += `${item.label}: ${item.value}\n`;
     });
 
+    const bilan = getBilanLines(reportData);
+    if (bilan) {
+      content += "\nBILAN DU STOCK (prix de gros)\n";
+      bilan.forEach((item) => {
+        content += `${item.label}: ${item.value}\n`;
+      });
+    }
+
     if (headers.length > 0) {
       content += "\nDÉTAILS\n";
       content += headers.map((h) => headerMap[h] || h).join(",") + "\n";
@@ -357,6 +391,15 @@ const Reports = () => {
     getDisplaySummary(reportData).forEach((item) => {
       content += `${item.label}: ${item.value}\n`;
     });
+
+    const bilan = getBilanLines(reportData);
+    if (bilan) {
+      content += `\nBILAN DU STOCK (prix de gros):\n`;
+      content += `${"-".repeat(20)}\n`;
+      bilan.forEach((item) => {
+        content += `${item.label}: ${item.value}\n`;
+      });
+    }
 
     content += `\nDÉTAILS:\n`;
     content += `${"-".repeat(20)}\n`;
@@ -510,6 +553,22 @@ const Reports = () => {
                 </div>
               `).join('')}
             </div>
+          </div>
+          ` : ''}
+
+          ${getBilanLines(viewingReport) ? `
+          <div class="summary-section">
+            <h3 style="font-size: 14pt; margin-bottom: 10px;">Bilan du stock (prix de gros)</h3>
+            <table style="margin-top: 0;">
+              <tbody>
+                ${getBilanLines(viewingReport)!.map((item) => `
+                  <tr>
+                    <td>${item.label}</td>
+                    <td style="text-align: right; font-weight: bold; ${item.ecart ? 'color: #b45309;' : ''}">${item.value}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
           </div>
           ` : ''}
 
@@ -840,6 +899,22 @@ const Reports = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Bilan du stock (valeurs calculées par le backend, prix de gros) */}
+            {getBilanLines(viewingReport) && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4 text-black">Bilan du stock</h3>
+                <div className="border border-gray-300 rounded-lg bg-gray-50 divide-y divide-gray-200">
+                  {getBilanLines(viewingReport)!.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center px-4 py-2 text-sm">
+                      <span className={item.ecart ? "text-amber-700" : "text-gray-700"}>{item.label}</span>
+                      <span className={`font-medium ${item.ecart ? "text-amber-700" : "text-black"}`}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Montants valorisés au prix de gros.</p>
               </div>
             )}
 
