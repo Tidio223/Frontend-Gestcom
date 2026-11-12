@@ -8,10 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, TrendingUp, DollarSign, ShoppingCart, Eye, FileText, Loader2, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL, getFetchOptions } from "@/config/api";
-import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
 
 interface SaleItem {
   productId: string;
@@ -57,10 +55,8 @@ const Sales = () => {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
-  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
   const formatCurrency = (amount: number) => {
     return `${amount.toLocaleString('fr-FR')} FCFA`;
@@ -246,7 +242,7 @@ const Sales = () => {
         localStorage.removeItem('token');
         navigate('/auth');
       } else if (response.status === 403) {
-        toast({ title: "Accès refusé", description: data.message || "Seul le super administrateur peut supprimer des ventes", variant: "destructive" });
+        toast({ title: "Accès refusé", description: data.message || "La suppression de cette vente a été refusée", variant: "destructive" });
       } else {
         toast({ title: "Erreur", description: data.message || "Impossible de supprimer la vente", variant: "destructive" });
       }
@@ -468,18 +464,16 @@ const Sales = () => {
                         <FileText className="h-4 w-4" />
                       </Button>
                     )}
-                    {isSuperAdmin && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDeleteDialog(sale)}
-                        title="Supprimer la vente"
-                        className="text-destructive hover:text-destructive/80"
-                        disabled={isDeleting}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openDeleteDialog(sale)}
+                      title="Supprimer la vente"
+                      className="text-destructive hover:text-destructive/80"
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               ))
@@ -497,7 +491,7 @@ const Sales = () => {
           {selectedSale && (
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                Supprimer la vente <strong>#{selectedSale._id.slice(-6)}</strong> de <strong>{selectedSale.customer}</strong> d'un montant de <strong>{formatCurrency(selectedSale.total)}</strong> ? Cette action est irréversible.
+                Supprimer la vente <strong>#{selectedSale._id.slice(-6)}</strong> de <strong>{selectedSale.customer}</strong> d'un montant de <strong>{formatCurrency(selectedSale.total)}</strong> ? Cette action est irréversible. Les produits seront remis en stock.
               </p>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1" disabled={isDeleting}>

@@ -9,10 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Product, formatCurrency } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { COMPANY_INFO } from "@/config/company";
-import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
 import { useNavigate } from "react-router-dom";
 import "@/styles/print.css";
 
@@ -35,6 +33,7 @@ const Products = () => {
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteImpact, setDeleteImpact] = useState<{ stock: number; salesCount: number; movementsCount: number } | null>(null);
   const [stockManagementOpen, setStockManagementOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -45,9 +44,7 @@ const Products = () => {
   const [stockManagementReason, setStockManagementReason] = useState("");
   const [stockManagementProductId, setStockManagementProductId] = useState("");
   const { toast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
 
   // Charger les produits et les mouvements de stock depuis l'API
   useEffect(() => {
@@ -260,7 +257,8 @@ const Products = () => {
         localStorage.removeItem('token');
         navigate('/auth');
       } else if (response.status === 403) {
-        toast({ title: "Accès refusé", description: "Seul le super administrateur peut supprimer des produits", variant: "destructive" });
+        const error = await response.json().catch(() => ({}));
+        toast({ title: "Accès refusé", description: error.message || "La suppression de ce produit a été refusée", variant: "destructive" });
       } else {
         const error = await response.json();
         toast({ title: "Erreur", description: error.message || "Impossible de supprimer le produit", variant: "destructive" });
@@ -278,7 +276,13 @@ const Products = () => {
 
   const openDeleteDialog = (product: Product) => {
     setSelectedProduct(product);
+    setDeleteImpact(null);
     setDeleteOpen(true);
+    // Charger l'impact de la suppression (ventes et mouvements liés)
+    fetch(`${API_BASE_URL}/api/products/${product.id}/impact`, getFetchOptions())
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setDeleteImpact(d.data); })
+      .catch(() => {});
   };
 
   const openStockManagementDialog = () => {
@@ -702,16 +706,14 @@ const Products = () => {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      {isSuperAdmin && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openDeleteDialog(p)}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive/80"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDeleteDialog(p)}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive/80"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -781,8 +783,21 @@ const Products = () => {
           {selectedProduct && (
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                Êtes-vous sûr de vouloir supprimer le produit <strong>{selectedProduct.name}</strong> ?
+                Supprimer le produit <strong>{selectedProduct.name}</strong> ? Cette action est irréversible.
               </p>
+              {(selectedProduct.stock > 0 || (deleteImpact?.salesCount ?? 0) > 0 || (deleteImpact?.movementsCount ?? 0) > 0) && (
+                <div className="text-sm text-amber-700 space-y-1">
+                  {selectedProduct.stock > 0 && (
+                    <p>Il reste {selectedProduct.stock} {selectedProduct.unit} en stock.</p>
+                  )}
+                  {(deleteImpact?.salesCount ?? 0) > 0 && (
+                    <p>Ce produit apparaît dans {deleteImpact!.salesCount} vente(s).</p>
+                  )}
+                  {(deleteImpact?.movementsCount ?? 0) > 0 && (
+                    <p>Ce produit a {deleteImpact!.movementsCount} mouvement(s) de stock enregistré(s).</p>
+                  )}
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1">
                   Annuler

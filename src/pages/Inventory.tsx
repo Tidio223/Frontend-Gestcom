@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
+import PrintableInventory from "@/components/print/PrintableInventory";
+import { printHtmlDocument } from "@/lib/print";
+import { renderToStaticMarkup } from "react-dom/server";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -94,48 +97,26 @@ const Inventory = () => {
   };
 
   const printInventory = (report: any) => {
-    const element = document.getElementById(`inventory-${report._id}`);
-    if (!element) return;
-    
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${report.period}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .summary { margin-bottom: 20px; }
-            .items { margin: 20px 0; }
-            .item { display: flex; justify-content: space-between; margin: 10px 0; }
-            .total { border-top: 2px solid #000; padding-top: 10px; font-weight: bold; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          ${element.innerHTML}
-        </body>
-      </html>
-    `;
-    
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-    
-    toast({ title: "Impression lancée", description: `${report.period} est prêt à être imprimé` });
+    // Rendu du composant dédié : fonctionne depuis la liste et depuis la fiche
+    const html = renderToStaticMarkup(<PrintableInventory report={report} />);
+    if (printHtmlDocument(report.period, html)) {
+      toast({ title: "Impression lancée", description: `${report.period} est prêt à être imprimé` });
+    }
   };
 
   const generatePDF = async (report: any) => {
-    const element = document.getElementById(`inventory-${report._id}`);
-    if (!element) return;
+    // On rend le document imprimable dans un conteneur hors écran :
+    // fonctionne aussi quand la fiche n'est pas ouverte
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '794px';
+    container.innerHTML = renderToStaticMarkup(<PrintableInventory report={report} />);
+    document.body.appendChild(container);
 
     try {
-      const canvas = await html2canvas(element, {
+      const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
         scale: 2,
         logging: false,
         useCORS: true,
@@ -157,6 +138,8 @@ const Inventory = () => {
       toast({ title: "PDF généré", description: `L'inventaire ${report.period} a été téléchargé` });
     } catch (error) {
       toast({ title: "Erreur", description: "Impossible de générer le PDF", variant: "destructive" });
+    } finally {
+      container.remove();
     }
   };
 
@@ -510,88 +493,8 @@ const Inventory = () => {
           </DialogHeader>
           {selectedReport && (
             <>
-              <div id={`inventory-${selectedReport._id}`} className="p-6 bg-white text-gray-900" style={{ fontFamily: 'Arial, sans-serif' }}>
-                <div className="text-center border-b-2 border-gray-900 pb-4 mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">RAPPORT D'INVENTAIRE</h2>
-                  <p className="text-lg text-gray-900">{selectedReport.period}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-8 mb-6">
-                  <div>
-                    <h3 className="font-bold mb-2 text-gray-900">Résumé</h3>
-                    <p className="text-sm text-gray-900">Nombre de produits: {selectedReport.items?.length || 0}</p>
-                    <p className="text-sm text-gray-900">Montant de l'inventaire (prix de gros): {formatCurrency(selectedReport.montantInventaire ?? (selectedReport.items || []).reduce((s: number, i: any) => s + (i.total || 0), 0))}</p>
-                    <p className="text-sm text-gray-900">Quantité vendue: {selectedReport.totalProductsSold || 0}</p>
-                    <p className="text-sm text-gray-900">Date: {new Date(selectedReport.date).toLocaleDateString('fr-FR')}</p>
-                  </div>
-                  <div>
-                    <h3 className="font-bold mb-2 text-gray-900">Valeur du stock</h3>
-                    <p className="text-sm text-gray-900">Prix de gros: {formatCurrency(selectedReport.stockValueWholesale || 0)}</p>
-                  </div>
-                </div>
-
-                {getBilanLines(selectedReport) && (
-                  <div className="mb-6">
-                    <h3 className="font-bold mb-2 text-gray-900">Bilan du stock</h3>
-                    <table className="w-full border-collapse border border-gray-300">
-                      <tbody>
-                        {getBilanLines(selectedReport)!.map((line, i) => (
-                          <tr key={i}>
-                            <td className={`border border-gray-300 px-4 py-2 text-sm ${line.ecart ? 'text-amber-700' : 'text-gray-900'}`}>
-                              {line.label}
-                            </td>
-                            <td className={`border border-gray-300 px-4 py-2 text-sm text-right font-medium ${line.ecart ? 'text-amber-700' : 'text-gray-900'}`}>
-                              {line.value}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <p className="text-xs text-gray-600 mt-1">Montants valorisés au prix de gros.</p>
-                  </div>
-                )}
-
-                <div className="mb-6">
-                  <h3 className="font-bold mb-3 text-gray-900">Détail des sorties de stock (prix de gros)</h3>
-                  <table className="w-full border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-900">Produit</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Type</th>
-                        <th className="border border-gray-300 px-4 py-2 text-center font-bold text-gray-900">Quantité</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Prix unitaire</th>
-                        <th className="border border-gray-300 px-4 py-2 text-right font-bold text-gray-900">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(selectedReport.items || []).map((item: any, i: number) => (
-                        <tr key={i}>
-                          <td className="border border-gray-300 px-4 py-2 text-gray-900">{item.productName}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.typeVente === 'gros' ? 'Gros' : 'Détail'}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-center text-gray-900">{item.quantitySold}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right text-gray-900">{formatCurrency(item.unitPrice)}</td>
-                          <td className="border border-gray-300 px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(item.total)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex justify-end mb-6">
-                  <div className="border border-gray-300 p-4 w-64 bg-gray-50">
-                    <div className="flex justify-between">
-                      <span className="font-bold text-lg text-gray-900">Total:</span>
-                      <span className="font-bold text-lg text-gray-900">{formatCurrency(selectedReport.montantInventaire ?? (selectedReport.items || []).reduce((s: number, i: any) => s + (i.total || 0), 0))}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-300 pt-4 text-xs text-gray-600">
-                  <p className="mb-2 text-gray-900"><strong>Mentions:</strong></p>
-                  <p className="mb-1 text-gray-600">Rapport généré automatiquement par GestCom</p>
-                  <p className="text-gray-600">Pour toute question, contactez le service de gestion</p>
-                </div>
-              </div>
+              {/* Document imprimable : même rendu à l'écran, à l'impression et en PDF */}
+              <PrintableInventory report={selectedReport} />
               
               <div className="flex justify-center gap-2 mt-6">
                 <Button onClick={() => printInventory(selectedReport)}>

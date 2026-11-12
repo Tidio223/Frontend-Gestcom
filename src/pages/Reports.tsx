@@ -13,6 +13,8 @@ import html2canvas from "html2canvas";
 import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { COMPANY_INFO } from "@/config/company";
 import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
+import PrintableReport from "@/components/print/PrintableReport";
+import { printHtmlDocument } from "@/lib/print";
 import "@/styles/print.css";
 
 const Reports = () => {
@@ -54,6 +56,7 @@ const Reports = () => {
     totalAvailable: "Stock disponible",
     totalOrders: "Nombre de commandes",
     type: "Type",
+    typeVente: "Type de vente",
     description: "Description",
   };
 
@@ -109,6 +112,9 @@ const Reports = () => {
     if (key === 'date') {
       const d = new Date(value);
       return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString('fr-FR');
+    }
+    if (key === 'typeVente') {
+      return String(value) === 'gros' ? 'Gros' : 'Détail';
     }
     if (key === 'status' || key === 'type') {
       return statusLabels[String(value)] || String(value);
@@ -415,9 +421,10 @@ const Reports = () => {
   };
 
   const generatePDF = async (reportData: any) => {
-    const element = document.getElementById('report-viewer');
+    // On ne capture que le document imprimable (pas le titre ni les boutons)
+    const element = document.querySelector('#report-viewer .gc-doc') as HTMLElement | null;
     if (!element) {
-      console.error('Element report-viewer not found');
+      console.error('Element report-viewer .gc-doc not found');
       return;
     }
 
@@ -448,158 +455,10 @@ const Reports = () => {
   };
 
   const printReport = () => {
-    const element = document.getElementById('report-viewer');
-    if (!element) return;
-    
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${getReportTitle(viewingReport)}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 0; 
-              padding: 15mm; 
-              background: white; 
-              color: black;
-            }
-            @page {
-              size: A4;
-              margin: 15mm;
-            }
-            .document-header {
-              text-align: center;
-              margin-bottom: 30px;
-              border-bottom: 2px solid #000;
-              padding-bottom: 20px;
-            }
-            .document-header h2 {
-              font-size: 20pt;
-              font-weight: bold;
-              margin: 0 0 10px 0;
-            }
-            .summary-section {
-              margin-bottom: 30px;
-            }
-            .summary-grid {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 15px;
-              margin-top: 15px;
-            }
-            .summary-item {
-              border: 1px solid #000;
-              padding: 10px;
-              background: #f9f9f9;
-              page-break-inside: avoid;
-            }
-            .summary-section {
-              page-break-inside: avoid;
-            }
-            thead {
-              display: table-header-group;
-            }
-            .summary-item p:first-child {
-              font-size: 9pt;
-              margin: 0 0 5px 0;
-            }
-            .summary-item p:last-child {
-              font-size: 14pt;
-              font-weight: bold;
-              margin: 0;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 20px 0;
-            }
-            th, td {
-              border: 1px solid #000;
-              padding: 8px;
-              text-align: left;
-            }
-            th {
-              background-color: #f0f0f0;
-              font-weight: bold;
-            }
-            tr {
-              page-break-inside: avoid;
-            }
-            @media print {
-              body { margin: 0; }
-            }
-          </style>
-        </head>
-        <body class="print-window-body">
-          <div class="document-header">
-            <h2>${getReportTitle(viewingReport)}</h2>
-            <p>Rapport généré le ${new Date().toLocaleDateString('fr-FR')}</p>
-            <p style="font-size: 10pt;">${COMPANY_INFO.name} - ${COMPANY_INFO.description}</p>
-          </div>
-          
-          ${getDisplaySummary(viewingReport).length > 0 ? `
-          <div class="summary-section">
-            <h3 style="font-size: 14pt; margin-bottom: 10px;">Résumé</h3>
-            <div class="summary-grid">
-              ${getDisplaySummary(viewingReport).map((item) => `
-                <div class="summary-item">
-                  <p>${item.label}</p>
-                  <p>${item.value}</p>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-          ` : ''}
-
-          ${getBilanLines(viewingReport) ? `
-          <div class="summary-section">
-            <h3 style="font-size: 14pt; margin-bottom: 10px;">Bilan du stock (prix de gros)</h3>
-            <table style="margin-top: 0;">
-              <tbody>
-                ${getBilanLines(viewingReport)!.map((item) => `
-                  <tr>
-                    <td>${item.label}</td>
-                    <td style="text-align: right; font-weight: bold; ${item.ecart ? 'color: #b45309;' : ''}">${item.value}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-          ` : ''}
-
-          <h3 style="font-size: 14pt; margin-bottom: 10px;">Détails</h3>
-          <table>
-            <thead>
-              <tr>
-                ${viewingReport.data.length > 0 ? Object.keys(viewingReport.data[0]).map(header => `
-                  <th>${headerMap[header] || header}</th>
-                `).join('') : ''}
-              </tr>
-            </thead>
-            <tbody>
-              ${viewingReport.data.map((row: any) => `
-                <tr>
-                  ${Object.keys(viewingReport.data[0] || {}).map((key) => `
-                    <td>${formatCellValue(key, row[key])}</td>
-                  `).join('')}
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
-    
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.print();
-    };
+    // On imprime le document dédié (.gc-doc contient ses propres styles)
+    const doc = document.querySelector('#report-viewer .gc-doc');
+    if (!doc) return;
+    printHtmlDocument(getReportTitle(viewingReport), doc.outerHTML);
   };
 
   // Premier rapport de ventes disposant d'un classement de produits
@@ -887,65 +746,15 @@ const Reports = () => {
           </div>
 
           <div>
-            {/* Summary Section */}
-            {getDisplaySummary(viewingReport).length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-4 text-black">Résumé</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {getDisplaySummary(viewingReport).map((item, index) => (
-                    <div key={index} className="p-4 border border-gray-300 rounded-lg bg-gray-50">
-                      <p className="text-sm text-gray-700">{item.label}</p>
-                      <p className="text-xl font-bold text-black">{item.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Bilan du stock (valeurs calculées par le backend, prix de gros) */}
-            {getBilanLines(viewingReport) && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold mb-4 text-black">Bilan du stock</h3>
-                <div className="border border-gray-300 rounded-lg bg-gray-50 divide-y divide-gray-200">
-                  {getBilanLines(viewingReport)!.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center px-4 py-2 text-sm">
-                      <span className={item.ecart ? "text-amber-700" : "text-gray-700"}>{item.label}</span>
-                      <span className={`font-medium ${item.ecart ? "text-amber-700" : "text-black"}`}>{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">Montants valorisés au prix de gros.</p>
-              </div>
-            )}
-
-            {/* Data Table */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-black">Détails</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-black">
-                  <thead>
-                    <tr className="border-b border-gray-300 bg-gray-100">
-                      {viewingReport.data.length > 0 && Object.keys(viewingReport.data[0]).map((header) => (
-                        <th key={header} className="text-left p-2 border-b border-gray-300 font-medium text-black">
-                          {headerMap[header] || header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewingReport.data.map((row: any, index: number) => (
-                      <tr key={index} className="border-b border-gray-300 hover:bg-gray-50">
-                        {Object.keys(viewingReport.data[0] || {}).map((key, cellIndex) => (
-                          <td key={cellIndex} className="p-2 border-b border-gray-300 text-black">
-                            {formatCellValue(key, row[key])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Document imprimable : même rendu à l'écran, à l'impression et en PDF */}
+            <PrintableReport
+              report={viewingReport}
+              title={getReportTitle(viewingReport)}
+              summary={getDisplaySummary(viewingReport)}
+              bilan={getBilanLines(viewingReport)}
+              headers={Object.keys(viewingReport.data[0] || {}).map((key) => ({ key, label: headerMap[key] || key }))}
+              formatCell={formatCellValue}
+            />
           </div>
         </div>
       )}
