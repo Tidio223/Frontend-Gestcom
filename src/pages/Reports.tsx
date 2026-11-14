@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar, Eye, FileText } from "lucide-react";
 import { Download, TrendingUp, DollarSign, Users, Package, Printer, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +25,7 @@ const Reports = () => {
   const [viewingReport, setViewingReport] = useState<any>(null);
   const [currentReportType, setCurrentReportType] = useState<string>("");
   const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -90,12 +92,50 @@ const Reports = () => {
     year: "Cette année",
   };
 
+  const MONTH_NAMES = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+  ];
+
+  /**
+   * Libellé de période calculé à partir de la DATE du rapport (jamais du
+   * titre enregistré, qui contient "Aujourd'hui" pour tous les rapports).
+   * Comparaison en UTC = fuseau Africa/Bamako (UTC+0).
+   */
+  const getPeriodLabel = (report: any): string => {
+    const d = report?.date ? new Date(report.date) : null;
+    const valid = d && !isNaN(d.getTime());
+
+    switch (report?.period) {
+      case 'day': {
+        if (!valid) return "Aujourd'hui";
+        const today = new Date();
+        const diffDays = Math.round(
+          (Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) -
+            Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())) / 86400000
+        );
+        if (diffDays === 0) return "Aujourd'hui";
+        if (diffDays === 1) return "Hier";
+        if (diffDays === 2) return "Avant-hier";
+        return d.toLocaleDateString('fr-FR');
+      }
+      case 'week':
+        return valid ? `Semaine du ${d.toLocaleDateString('fr-FR')}` : 'Cette semaine';
+      case 'month':
+        return valid ? `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}` : 'Ce mois';
+      case 'year':
+        return valid ? `Année ${d.getUTCFullYear()}` : 'Cette année';
+      default:
+        return periodLabels[report?.period] || report?.period || '';
+    }
+  };
+
   const currencyKeys = ['amount', 'totalSpent', 'revenue', 'totalRevenue', 'averageOrderValue'];
 
   const formatFCFA = (amount: number) => `${amount.toLocaleString('fr-FR')} FCFA`;
 
   const getReportTitle = (report: any) =>
-    `${typeTitles[report?.type] || report?.type || 'Rapport'} - ${periodLabels[report?.period] || report?.period || ''}`;
+    `${typeTitles[report?.type] || report?.type || 'Rapport'} - ${getPeriodLabel(report)}`;
 
   // Libellé de résumé adapté au type de rapport
   const getSummaryLabel = (key: string, reportType: string) => {
@@ -158,25 +198,20 @@ const Reports = () => {
       });
   };
 
-  // Bilan du stock (prix de gros) : lignes affichées dans la fiche, l'impression
-  // et les exports. Les valeurs sont calculées et persistées par le backend.
+  // Bilan simple de la fiche : mêmes chiffres que la fiche d'inventaire,
+  // calculés en direct par le backend (bilanLive) — aucune valeur enregistrée.
   const getBilanLines = (report: any) => {
-    const b = report?.bilanStock;
-    if (!b || b.montantStockActuel == null) return null;
+    const b = report?.bilanLive;
+    if (!b) return null;
     const lines: { label: string; value: string; ecart?: boolean }[] = [
-      { label: "Montant du stock au début", value: formatFCFA(b.montantOuverture || 0) },
+      { label: "Stock au début", value: formatFCFA(b.debut || 0) },
+      { label: "Vendu pendant la période", value: `- ${formatFCFA(b.vendu || 0)}` },
+      { label: "Il reste en stock", value: formatFCFA(b.reste || 0) },
     ];
-    if ((b.montantEntrees || 0) > 0) {
-      lines.push({ label: "Entrées de stock (au prix de gros)", value: `+ ${formatFCFA(b.montantEntrees)}` });
-    }
-    lines.push({ label: "Montant de l'inventaire (sorties au prix de gros)", value: `- ${formatFCFA(b.montantInventaire || 0)}` });
-    lines.push({ label: "Montant actuel du stock", value: formatFCFA(b.montantStockActuel) });
-    if (Math.abs(b.ecartStock || 0) > 1) {
-      lines.push({
-        label: `Écart avec le stock réel (${formatFCFA(b.montantStockReel || 0)})`,
-        value: formatFCFA(b.ecartStock),
-        ecart: true,
-      });
+    if (Math.abs(b.diff || 0) > 1) {
+      lines.push({ label: "Différence constatée", value: formatFCFA(b.diff), ecart: true });
+    } else {
+      lines.push({ label: "Différence constatée", value: "Aucune différence" });
     }
     return lines;
   };
@@ -219,9 +254,30 @@ const Reports = () => {
     }
   };
 
+  // Statistiques du tableau de bord : ventes de la période sélectionnée
+  const fetchDashboardStats = async (period: string = 'all') => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/reports/dashboard?period=${period}`, {
+        ...getFetchOptions(),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setDashboardStats(data.data);
+      }
+    } catch (error) {
+      console.error('Erreur chargement statistiques:', error);
+    }
+  };
+
   useEffect(() => {
     fetchReports();
+    fetchDashboardStats('all');
   }, []);
+
+  // Recharger les stats quand la période sélectionnée change
+  useEffect(() => {
+    fetchDashboardStats(dateRange);
+  }, [dateRange]);
 
   // Régénérer les rapports
   const handleRegenerate = async () => {
@@ -240,6 +296,7 @@ const Reports = () => {
       if (response.ok) {
         toast({ title: "Succès", description: "Rapports régénérés avec succès" });
         fetchReports();
+        fetchDashboardStats(dateRange);
       } else {
         toast({ title: "Erreur", description: "Impossible de régénérer les rapports", variant: "destructive" });
       }
@@ -461,10 +518,9 @@ const Reports = () => {
     printHtmlDocument(getReportTitle(viewingReport), doc.outerHTML);
   };
 
-  // Premier rapport de ventes disposant d'un classement de produits
-  const topProducts: any[] =
-    savedReports.find((r) => r.type === 'sales' && Array.isArray(r.summary?.topProducts))
-      ?.summary?.topProducts || [];
+  // Classement des produits : calculé sur TOUTES les ventes enregistrées
+  // (endpoint /api/reports/dashboard), pas seulement le dernier rapport.
+  const topProducts: any[] = dashboardStats?.topProducts || [];
 
   return (
     <div className="space-y-6">
@@ -507,12 +563,12 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {savedReports.length > 0 && savedReports[0]?.summary?.totalRevenue 
-                ? `${savedReports[0].summary.totalRevenue.toLocaleString('fr-FR')} FCFA` 
+              {dashboardStats?.totalRevenue != null
+                ? `${dashboardStats.totalRevenue.toLocaleString('fr-FR')} FCFA`
                 : "0 FCFA"}
             </div>
             <p className="text-xs text-muted-foreground">
-              {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
+              {dashboardStats ? "Toutes les ventes enregistrées" : "Aucune donnée"}
             </p>
           </CardContent>
         </Card>
@@ -524,10 +580,10 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {savedReports.length > 0 ? (savedReports[0]?.summary?.totalCustomers || 0) : 0}
+              {dashboardStats?.totalCustomers ?? 0}
             </div>
             <p className="text-xs text-muted-foreground">
-              {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
+              {dashboardStats ? "Toutes les ventes enregistrées" : "Aucune donnée"}
             </p>
           </CardContent>
         </Card>
@@ -539,10 +595,10 @@ const Reports = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {savedReports.length > 0 ? (savedReports[0]?.summary?.totalProducts || 0) : 0}
+              {dashboardStats?.totalQuantity ?? 0}
             </div>
             <p className="text-xs text-muted-foreground">
-              {savedReports.length > 0 ? "Basé sur les rapports" : "Aucune donnée"}
+              {dashboardStats ? "Toutes les ventes enregistrées" : "Aucune donnée"}
             </p>
           </CardContent>
         </Card>
@@ -581,7 +637,7 @@ const Reports = () => {
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                        <p className="font-medium">{report.title}</p>
+                        <p className="font-medium">{getReportTitle(report)}</p>
                       </div>
                       <p className="text-sm text-muted-foreground">{typeLabels[report.type] || report.type} • {new Date(report.date).toLocaleDateString('fr-FR')}</p>
                     </div>
@@ -633,7 +689,7 @@ const Reports = () => {
                 savedReports.slice(0, 4).map((report, index) => (
                   <div key={report._id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="space-y-1">
-                      <p className="font-medium">{report.title}</p>
+                      <p className="font-medium">{getReportTitle(report)}</p>
                       <p className="text-sm text-muted-foreground">{new Date(report.date).toLocaleDateString('fr-FR')}</p>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -675,7 +731,11 @@ const Reports = () => {
                     </div>
                     <div>
                       <p className="font-medium">{item.productName || 'Produit'}</p>
-                      <p className="text-sm text-muted-foreground">{item.quantitySold || 0} unités vendues</p>
+                      <p className="text-sm text-muted-foreground">
+                        {item.quantitySold || 0} {(item.quantitySold || 0) > 1
+                          ? `${item.unit || 'unité'}s`
+                          : (item.unit || 'unité')} vendue{(item.quantitySold || 0) > 1 ? 's' : ''}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
@@ -692,20 +752,18 @@ const Reports = () => {
         </CardContent>
       </Card>
 
-      {/* Report Viewer Modal */}
-      {viewingReport && (
-        <div id="report-viewer" key={currentReportType} className="print-document mt-6 p-6 bg-white text-black rounded-lg border border-gray-300 shadow-lg">
-          <div className="document-header flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold flex items-center space-x-2 text-black">
-                <FileText className="h-6 w-6 text-black" />
-                <span>{getReportTitle(viewingReport)}</span>
-              </h2>
-              <p className="text-gray-700 mt-2">
-                Rapport généré le {new Date().toLocaleDateString('fr-FR')}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">{COMPANY_INFO.name} - {COMPANY_INFO.description}</p>
-            </div>
+      {/* Report Viewer Modal : s'ouvre au centre, se ferme avec "Fermer" ou la croix */}
+      <Dialog open={!!viewingReport} onOpenChange={(open) => { if (!open) setViewingReport(null); }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          {viewingReport && (
+            <div id="report-viewer" key={currentReportType} className="print-document p-2 bg-white text-black rounded-lg">
+              <DialogHeader className="mb-4">
+                <DialogTitle className="flex items-center space-x-2 text-black">
+                  <FileText className="h-5 w-5 text-black" />
+                  <span>{getReportTitle(viewingReport)}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="document-header flex items-center justify-between mb-6">
             <div className="flex items-center space-x-2 print-hide">
               <Button 
                 onClick={printReport}
@@ -756,8 +814,10 @@ const Reports = () => {
               formatCell={formatCellValue}
             />
           </div>
-        </div>
-      )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

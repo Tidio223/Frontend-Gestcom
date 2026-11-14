@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { API_BASE_URL, getFetchOptions } from "@/config/api";
 import { SUPER_ADMIN_EMAIL } from "@/config/superadmin";
-import PrintableInventory from "@/components/print/PrintableInventory";
+import PrintableInventory, { computeInventoryBilan } from "@/components/print/PrintableInventory";
 import { printHtmlDocument } from "@/lib/print";
 import { renderToStaticMarkup } from "react-dom/server";
 import jsPDF from "jspdf";
@@ -43,6 +43,7 @@ const Inventory = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stockValueLive, setStockValueLive] = useState<number | null>(null);
   const { toast } = useToast();
 
   const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL;
@@ -58,6 +59,7 @@ const Inventory = () => {
 
       if (data.success) {
         setReports(data.data);
+        setStockValueLive(data.stockValueActuel ?? null);
       }
     } catch (error) {
       console.error('Error fetching inventories:', error);
@@ -143,23 +145,19 @@ const Inventory = () => {
     }
   };
 
-  // Bilan du stock (prix de gros) : valeurs calculées et persistées par le backend
+  // Bilan simple de la fiche : mêmes formules que PrintableInventory
   const getBilanLines = (report: any) => {
-    if (!report || report.montantStockActuel == null) return null;
+    if (!report) return null;
+    const b = computeInventoryBilan(report);
     const lines: { label: string; value: string; ecart?: boolean }[] = [
-      { label: "Montant du stock au début", value: formatCurrency(report.montantOuverture || 0) },
+      { label: "Stock au début", value: formatCurrency(b.debut) },
+      { label: "Vendu pendant la période", value: `- ${formatCurrency(b.vendu)}` },
+      { label: "Il reste en stock", value: formatCurrency(b.reste) },
     ];
-    if ((report.montantEntrees || 0) > 0) {
-      lines.push({ label: "Entrées de stock (au prix de gros)", value: `+ ${formatCurrency(report.montantEntrees)}` });
-    }
-    lines.push({ label: "Montant de l'inventaire (sorties au prix de gros)", value: `- ${formatCurrency(report.montantInventaire || 0)}` });
-    lines.push({ label: "Montant actuel du stock", value: formatCurrency(report.montantStockActuel) });
-    if (Math.abs(report.ecartStock || 0) > 1) {
-      lines.push({
-        label: `Écart avec le stock réel (${formatCurrency(report.montantStockReel || 0)})`,
-        value: formatCurrency(report.ecartStock),
-        ecart: true,
-      });
+    if (Math.abs(b.diff) >= 1) {
+      lines.push({ label: "Différence constatée", value: formatCurrency(b.diff), ecart: true });
+    } else {
+      lines.push({ label: "Différence constatée", value: "Aucune différence" });
     }
     return lines;
   };
@@ -181,7 +179,7 @@ const Inventory = () => {
       ["Montant de l'inventaire (prix de gros)", formatCurrency(totalGros)],
       ['Quantité vendue', String(report.totalProductsSold || 0)],
       ['Date', new Date(report.date).toLocaleDateString('fr-FR')],
-      ['Valeur du stock au prix de gros', formatCurrency(report.stockValueWholesale || 0)],
+      ['Valeur du stock au prix de gros', formatCurrency(report.stockValueActuel ?? report.stockValueWholesale ?? 0)],
     ];
 
     const download = (content: string, filename: string, mime: string) => {
@@ -267,14 +265,14 @@ const Inventory = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {reports.length > 0 && reports[0]?.montantStockActuel != null
-                ? formatCurrency(reports[0].montantStockActuel)
+              {stockValueLive != null
+                ? formatCurrency(stockValueLive)
                 : '0 FCFA'}
             </div>
             <p className="text-xs text-muted-foreground">
-              {reports.length > 0 && Math.abs(reports[0]?.ecartStock || 0) > 1
-                ? `Écart de ${formatCurrency(Math.abs(reports[0].ecartStock))} avec le stock réel`
-                : 'Ouverture + entrées − inventaire'}
+              {Math.abs(reports[0]?.ecartComptage || 0) > 1
+                ? `Écart de ${formatCurrency(Math.abs(reports[0].ecartComptage))} avec le stock réel`
+                : 'Aucun écart'}
             </p>
           </CardContent>
         </Card>
@@ -316,7 +314,9 @@ const Inventory = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {reports.length > 0 ? formatCurrency(reports[0]?.stockValueWholesale || 0) : '0 FCFA'}
+              {stockValueLive != null
+                ? formatCurrency(stockValueLive)
+                : reports.length > 0 ? formatCurrency(reports[0]?.stockValueWholesale || 0) : '0 FCFA'}
             </div>
             <p className="text-xs text-muted-foreground">
               Au prix de gros
@@ -495,8 +495,8 @@ const Inventory = () => {
             <>
               {/* Document imprimable : même rendu à l'écran, à l'impression et en PDF */}
               <PrintableInventory report={selectedReport} />
-              
-              <div className="flex justify-center gap-2 mt-6">
+
+              <div className="flex justify-center gap-2 mt-6 no-print">
                 <Button onClick={() => printInventory(selectedReport)}>
                   <Printer className="mr-2 h-4 w-4" />
                   Imprimer
