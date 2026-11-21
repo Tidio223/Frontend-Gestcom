@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { Search, Plus, Eye, Printer, Download, Edit, Trash2, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,48 @@ const Invoices = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const location = useLocation();
+  const { id: invoiceIdParam } = useParams();
+
+  // Transforme une facture API au format affiché
+  const transformInvoice = (inv: any): Invoice => ({
+    id: inv._id,
+    number: inv.number,
+    client: inv.client,
+    date: inv.date,
+    items: (inv.items || []).map((item: any) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+    })),
+    total: inv.total,
+    status: inv.status,
+    typeVente: inv.typeVente,
+  });
+
+  // Si un identifiant est dans l'URL (/invoices/:id), ouvrir la facture directement
+  useEffect(() => {
+    if (!invoiceIdParam) return;
+    const fetchOne = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/invoices/${invoiceIdParam}`, {
+          ...getFetchOptions(),
+        });
+        const data = await response.json();
+        if (data.success) {
+          setViewInvoice(transformInvoice(data.data));
+        } else {
+          toast({ title: "Erreur", description: data.message || "Facture introuvable", variant: "destructive" });
+        }
+      } catch (error) {
+        console.error('Erreur chargement facture:', error);
+        toast({ title: "Erreur", description: "Erreur de connexion au serveur", variant: "destructive" });
+      }
+    };
+    fetchOne();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceIdParam]);
 
   // Charger les factures depuis l'API
   useEffect(() => {
@@ -46,24 +88,7 @@ const Invoices = () => {
         console.log('Réponse factures:', data);
 
         if (data.success) {
-          // Transformer les données de l'API pour correspondre à l'interface
-          const transformedInvoices = data.data.map((inv: any) => ({
-            id: inv._id,
-            number: inv.number,
-            client: inv.client,
-            date: inv.date,
-            items: inv.items.map((item: any) => ({
-              productId: item.productId,
-              productName: item.productName,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              total: item.total,
-            })),
-            total: inv.total,
-            status: inv.status,
-            typeVente: inv.typeVente,
-          }));
-          setInvoiceList(transformedInvoices);
+          setInvoiceList(data.data.map(transformInvoice));
         } else {
           console.error('Erreur API factures:', data.message);
           toast({ title: "Erreur", description: data.message || "Erreur lors du chargement des factures", variant: "destructive" });
@@ -276,55 +301,66 @@ const Invoices = () => {
         <head>
           <title>Facture ${invoice.number}</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Arial&display=swap');
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 0; 
-              padding: 15mm; 
-              background: white; 
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+              background: white;
               color: black;
             }
             @page {
               size: A4;
-              margin: 15mm;
+              margin: 10mm;
             }
             .document-header {
               text-align: center;
-              margin-bottom: 30px;
+              margin-bottom: 15px;
               border-bottom: 2px solid #000;
-              padding-bottom: 20px;
+              padding-bottom: 10px;
+              page-break-after: avoid;
             }
             .document-header h1 {
-              font-size: 24pt;
+              font-size: 22pt;
               font-weight: bold;
-              margin: 0 0 10px 0;
+              margin: 0 0 6px 0;
             }
             .info-section {
               display: flex;
               justify-content: space-between;
-              gap: 30px;
-              margin-bottom: 30px;
+              gap: 20px;
+              margin-bottom: 15px;
             }
             .info-box {
               flex: 1;
             }
             .info-box h3 {
               font-weight: bold;
-              margin-bottom: 10px;
-              font-size: 14pt;
+              margin-bottom: 6px;
+              font-size: 13pt;
             }
             .info-box p {
-              margin: 5px 0;
-              font-size: 11pt;
+              margin: 3px 0;
+              font-size: 10pt;
+            }
+            h3 {
+              margin: 10px 0 4px 0;
+              font-size: 12pt;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              margin: 20px 0;
+              margin: 8px 0;
+              page-break-inside: auto;
+            }
+            thead {
+              display: table-header-group;
+            }
+            tr {
+              page-break-inside: avoid;
             }
             th, td {
               border: 1px solid #000;
-              padding: 8px;
+              padding: 5px 8px;
               text-align: left;
             }
             th {
@@ -334,21 +370,23 @@ const Invoices = () => {
             .total-section {
               display: flex;
               justify-content: flex-end;
-              margin: 30px 0;
+              margin: 12px 0;
+              page-break-inside: avoid;
             }
             .total-box {
               border: 2px solid #000;
-              padding: 15px;
+              padding: 8px 12px;
               width: 200px;
               text-align: right;
             }
             .signature-section {
-              margin-top: 40px;
+              margin-top: 20px;
+              page-break-inside: avoid;
             }
             .signature-row {
               display: flex;
               justify-content: space-between;
-              margin-top: 60px;
+              margin-top: 30px;
             }
             .signature-box {
               width: 45%;
@@ -356,17 +394,22 @@ const Invoices = () => {
             }
             .signature-line {
               border-top: 1px solid #000;
-              margin-top: 40px;
-              padding-top: 10px;
+              margin-top: 20px;
+              padding-top: 6px;
             }
             .legal-section {
               border-top: 1px solid #000;
-              padding-top: 15px;
-              margin-top: 30px;
+              padding-top: 10px;
+              margin-top: 15px;
               font-size: 9pt;
             }
             @media print {
-              body { margin: 0; }
+              html, body {
+                height: auto;
+                min-height: 0;
+                margin: 0;
+                padding: 0;
+              }
             }
           </style>
         </head>

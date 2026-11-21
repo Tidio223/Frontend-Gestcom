@@ -51,6 +51,7 @@ const App = () => (
               />
               <Route path="/reports" element={<Reports />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/invoices/:id" element={<Invoices />} />
               <Route path="/settings" element={<Settings />} />
               <Route
                 path="/financial"

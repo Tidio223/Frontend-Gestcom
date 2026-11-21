@@ -196,12 +196,18 @@ const Sales = () => {
 
       if (data.success) {
         const sale = data.data.sale;
+        const invoiceId = data.data.invoice?._id || sale?.invoiceId;
         setSales((prev) => [sale, ...prev]);
         setItems([]);
         setCustomer("");
         setCreateOpen(false);
 
         toast({ title: "Vente créée", description: `Vente enregistrée pour ${customer || 'Client anonyme'}` });
+
+        // Ouvrir directement la facture générée
+        if (invoiceId) {
+          navigate(`/invoices/${invoiceId}`);
+        }
       } else {
         console.error('Erreur création vente:', response.status, JSON.stringify(data, null, 2));
         const errorMessage = data.errors
